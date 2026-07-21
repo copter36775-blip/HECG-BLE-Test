@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ECG Advanced Medical Monitor (BLE Edition)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body { background: #000000; color: #cbd5e1; font-family: 'Inter', sans-serif; margin: 0; padding: 15px; }
+        .monitor-container { background: #0b0f19; border: 1px solid #1e293b; border-radius: 16px; padding: 20px; max-width: 1400px; margin: 0 auto; box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05); }
+        .header-panel { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #111827 0%, #0b0f19 100%); padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #1e293b; }
+        .header-panel h2 { margin: 0; color: #00f3ff; font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 15px; letter-spacing: 1px;}
+        .tab-btn { background: #1f2937; color: #9ca3af; border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; font-size: 13px; font-family: 'Inter', sans-serif;}
+        .tab-btn:hover { background: #374151; color: #fff; }
+        .tab-btn.active { background: rgba(0, 243, 255, 0.1); color: #00f3ff; border: 1px solid #00f3ff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); }
+        .tab-btn-metro.active { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.2); }
+        
+        .control-panel { display: flex; gap: 10px; align-items: center; font-size: 13px;}
+        select { background: #111827; color: #00f3ff; border: 1px solid #374151; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; outline: none; transition: 0.3s;}
+        select:hover { border-color: #00f3ff; }
+        button.action-btn { background: #00f3ff; color: #000; border: none; padding: 6px 15px; border-radius: 6px; cursor: pointer; font-weight: 800; text-transform: uppercase; transition: 0.3s; box-shadow: 0 0 10px rgba(0,243,255,0.3);}
+        button.action-btn:hover { background: #33ffff; box-shadow: 0 0 20px rgba(0,243,255,0.6); }
+        button.reset-btn { background: #f59e0b; color: #000; border: none; padding: 6px 15px; border-radius: 6px; cursor: pointer; font-weight: 800; text-transform: uppercase; transition: 0.3s;}
+        button.reset-btn:hover { background: #fbbf24; box-shadow: 0 0 15px rgba(245,158,11,0.5); }
+        
+        /* 🌟 สไตล์กล่องนาฬิกา Time Sync */
+        .time-sync-panel { background: #050505; border: 2px solid #374151; padding: 8px 20px; border-radius: 12px; display: flex; gap: 20px; align-items: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); margin-right: 15px; }
+        .time-box { text-align: center; min-width: 110px;}
+        .time-label { color: #9ca3af; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; margin-bottom: 2px;}
+        .time-value { font-size: 26px; font-family: 'JetBrains Mono', monospace; font-weight: 800; letter-spacing: 1px;}
+        .divider { width: 2px; height: 35px; background: #1e293b; }
+
+        .info-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .info-box { background: #111827; border: 1px solid #1e293b; padding: 10px 15px; border-radius: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+        .info-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .info-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: #e2e8f0; font-weight: 700;
+        }
+
+        /* 🌟 สไตล์กล่อง Engineering Dashboard ใหม่ (Batch & Raw) */
+        .eng-dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px; }
+        .eng-card { background: #050505; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; text-align: center; box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5); transition: 0.3s; }
+        .eng-card:hover { transform: translateY(-2px); box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.05); }
+        .eng-card-title { color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase;}
+        .eng-card-val { color: #fff; font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 10px rgba(255,255,255,0.1); }
+        
+        /* 💎 Charts Styles */
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; } /* 🌟 แก้เป็น 2 คอลัมน์ (1fr 1fr) */
+        .span-2 { grid-column: span 2; } /* 🌟 เพิ่มคลาสนี้สำหรับกราฟ HR ให้อมพื้นที่ 2 คอลัมน์ */
+        .chart-section { background: linear-gradient(180deg, #111827 0%, #0b0f19 100%); border: 1px solid #1e293b; padding: 12px 15px; border-radius: 10px; position: relative; }
+        .chart-top-bar { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: flex-end; }
+        .chart-title { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;}
+        .val-display { font-size: 18px; font-weight: 700; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 10px rgba(255,255,255,0.2);}
+        
+        .chart-layout { display: flex; position: relative; gap: 10px;}
+        .y-axis { width: 55px; display: flex; flex-direction: column; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-align: right; color: #6b7280; padding-top: 2px; padding-bottom: 2px;}
+        .y-axis span { position: relative; }
+        .y-axis span::after { content: ''; position: absolute; right: -8px; top: 50%; width: 5px; height: 1px; background: #374151; }
+        
+        .canvas-stack { position: relative; width: 100%; height: 160px; background: #050505; border: 1px solid #1e293b; overflow: hidden; border-radius: 6px;}
+        .canvas-stack canvas, .clin-chart-container canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        /* 💎 Clinical Styles */
+        .clinical-view { display: none; background: #050505; border-radius: 12px; padding: 20px; border: 1px solid #1e293b; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
+        .clinical-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #1e293b;}
+        .vital-box { text-align: right; background: rgba(0, 255, 68, 0.05); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(0, 255, 68, 0.1);}
+        .vital-title { font-size: 14px; color: #00ff44; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 800; margin-bottom: 0px; }
+        .vital-value { font-size: 65px; font-weight: 800; color: #00ff44; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 20px rgba(0,255,68,0.4); line-height: 1;}
+        .heart-icon { display: inline-block; color: #ff2a2a; font-size: 35px; margin-right: 15px; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .clin-chart-container { position: relative; width: 100%; height: 450px; background: #f8fafc; border: 2px solid #94a3b8; overflow: hidden; border-radius: 6px; box-shadow: inset 0 0 20px rgba(0,0,0,0.1); }
+        .clin-scale-info { position: absolute; bottom: 10px; left: 15px; color: #0f172a; font-size: 13px; z-index: 10; font-family: 'JetBrains Mono', monospace; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #cbd5e1;}
+        .clin-controls { display: flex; gap: 15px; margin-top: 15px; }
+        
+        /* 💎 Validation Styles */
+        .metro-view { display: none; padding: 25px; background: #111827; border-radius: 12px; border: 1px solid #f59e0b; box-shadow: 0 10px 30px rgba(245, 158, 11, 0.05);}
+        .metro-header { text-align: center; border-bottom: 1px solid #374151; padding-bottom: 20px; margin-bottom: 25px; }
+        .metro-header h2 { color: #f59e0b; margin: 0; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; font-weight: 800;}
+        .metro-header p { color: #9ca3af; margin: 5px 0 0 0; font-size: 14px;}
+        
+        .mode-selector { margin-top: 15px; background: #050505; display: inline-block; padding: 10px 20px; border-radius: 8px; border: 1px solid #374151; }
+        .mode-selector label { color: #fff; font-weight: 800; margin-right: 10px; font-size: 13px; letter-spacing: 1px;}
+        .mode-selector select { font-size: 14px; padding: 6px; background: #111827; color: #f59e0b; border: 1px solid #f59e0b; }
+
+        .metro-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        .metro-card { background: #0b0f19; border: 1px solid #1e293b; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; transition: 0.3s; box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);}
+        .metro-card.inactive { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
+        
+        .metro-card h3 { color: #fff; margin-top: 0; border-bottom: 1px solid #1e293b; padding-bottom: 10px; font-size: 16px; font-weight: 800;}
+        
+        .test-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .test-label { color: #9ca3af; font-size: 12px; font-weight: 600;}
+        .test-input { width: 100px; background: #111827; border: 1px solid #f59e0b; color: #fff; padding: 6px; text-align: center; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px; outline:none;}
+        
+        .live-box { background: #050505; border: 1px solid #00ff44; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; box-shadow: inset 0 0 20px rgba(0,255,68,0.05);}
+        .live-label { color: #00ff44; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 5px;}
+        .live-number { color: #fff; font-size: 32px; font-weight: 800; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 15px rgba(255,255,255,0.2);}
+        
+        .val-canvas { width: 100%; height: 120px; background: #000; border: 1px solid #1e293b; border-radius: 6px; margin-bottom: 15px; display: block; }
+        
+        .math-eq-box { background: #050505; padding: 12px; border-radius: 6px; border-left: 3px solid #374151; margin-bottom: 15px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9ca3af; line-height: 1.6;}
+        .math-eq-box span.hl { color: #e2e8f0; font-weight: 700; }
+        .math-eq-box span.val { color: #f59e0b; font-weight: 700; }
+        
+        .result-box { display: flex; justify-content: space-between; align-items: center; background: #111827; padding: 15px; border-radius: 8px; border-left: 4px solid #374151; transition: 0.3s;}
+        .result-val { font-size: 20px; font-weight: 800; font-family: 'JetBrains Mono', monospace;}
+        .pass-tag { color: #00ff44; font-weight: 800; font-size: 22px; text-shadow: 0 0 15px rgba(0,255,68,0.4); letter-spacing: 1px;}
+        .fail-tag { color: #ff2a2a; font-weight: 800; font-size: 22px; text-shadow: 0 0 15px rgba(255,42,42,0.4); letter-spacing: 1px;}
+
+    </style>
+</head>
+<body>
+
+    <div class="monitor-container">
+        <div class="header-panel">
+            <h2>ADS1292R 
+                <button id="btnEng" class="tab-btn active" onclick="switchMode('eng')">🛠️ ENGINEERING</button>
+                <button id="btnClin" class="tab-btn" onclick="switchMode('clin')">🏥 CLINICAL</button>
+                <button id="btnMetro" class="tab-btn tab-btn-metro" onclick="switchMode('metro')">✅ RT VALIDATION</button>
+            </h2>
+            <div class="control-panel" style="display: flex; gap: 10px; align-items: center; font-size: 13px; flex-wrap: wrap; justify-content: flex-end;">
+                <div class="time-sync-panel" style="margin-right: 0;">
+                    <div class="time-box">
+                        <div class="time-label">🌐 WEB TIME</div>
+                        <div id="webTimeDisplay" class="time-value" style="color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.4);">--:--:--</div>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="time-box">
+                        <div class="time-label">⚡ MCU RTC</div>
+                        <div id="mcuTimeDisplay" class="time-value" style="color: #00ff44; text-shadow: 0 0 15px rgba(0,255,68,0.5);">--:--:--</div>
+                        <div id="timeDriftDisplay" style="color:#f59e0b; font-size:11px; font-weight:800; margin-top:2px;">Drift: 0s</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center; background: #050505; padding: 10px 15px; border-radius: 12px; border: 1px solid #374151;">
+                    <button id="testSigBtn" class="action-btn" style="background:#8b5cf6; box-shadow:0 0 10px rgba(139, 92, 246, 0.4);" onclick="toggleTestSignal()">TEST: OFF</button>
+                    <button id="noiseTestBtn" class="action-btn" style="background:#3b82f6; box-shadow:0 0 10px rgba(59, 130, 246, 0.4);" onclick="toggleNoiseTest()">NOISE: OFF</button>
+                    <button id="rldBtn" class="action-btn" style="background:#10b981; box-shadow:0 0 10px rgba(16, 185, 129, 0.4);" onclick="toggleRld()">RLD: ON</button>
+
+                    <span style="color: #c026d3; font-weight: 800; margin-left: 5px;">SPS:</span>
+                    <select id="spsSelect" onchange="changeSps()" style="border-color: #c026d3; color: #e879f9;">
+                        <option value="250">250</option><option value="500" selected>500</option><option value="1000">1000</option>
+                    </select>
+                    <span style="margin-left: 5px;">GAIN:</span>
+                    <select id="gainSelect" onchange="updateMaxValues()">
+                        <option value="1">x1</option><option value="2">x2</option><option value="3">x3</option>
+                        <option value="4">x4</option><option value="6" selected>x6</option><option value="8">x8</option><option value="m">x12</option>
+                    </select>
+                </div>
+
+                <div style="background:#1e293b; padding:8px 15px; border-radius:8px; display:flex; gap:10px; align-items:center; border: 1px solid #374151;">
+                    <span style="color:#00f3ff; font-weight:800; font-size:12px;">FILE ID:</span>
+                    <input type="text" id="patientId" placeholder="ex. HN001" style="background:#050505; color:#fff; border:1px solid #00f3ff; border-radius:4px; padding:6px 10px; width:100px; font-family:'JetBrains Mono'; font-weight:bold; outline:none;">
+                    <button class="action-btn" onclick="setPatientId()" style="padding: 6px 12px; font-size:12px;">SET ID</button>
+                    <button class="action-btn" style="background:#f59e0b; box-shadow:0 0 10px rgba(245, 158, 11, 0.4); padding: 6px 12px; font-size:12px;" onclick="requestFileList()">📂 SD CARD</button>
+                    <button class="action-btn" style="background:#ef4444; box-shadow:0 0 10px rgba(239, 68, 68, 0.4); padding: 6px 12px; font-size:12px; margin-left:5px;" onclick="forceCheckSD()">🔌 CHECK SD</button>
+                </div>
+
+                <div style="background:#1e293b; padding:8px 15px; border-radius:8px; display:flex; gap:10px; align-items:center; border: 1px solid #374151; margin-top:10px;">
+                    <span style="color:#f59e0b; font-weight:800; font-size:12px;">⏱ AUTO DURATION:</span>
+                    <input type="number" id="recordSec" placeholder="5" value="5" style="background:#050505; color:#fff; border:1px solid #f59e0b; border-radius:4px; padding:6px 10px; width:70px; font-family:'JetBrains Mono'; font-weight:bold; outline:none; text-align:center;">
+                    <span style="color:#94a3b8; font-size:12px; font-weight:bold;">Sec.</span>
+                    <button class="action-btn" onclick="triggerWebRecord()" style="background:#ef4444; box-shadow:0 0 10px rgba(239, 68, 68, 0.4); padding: 6px 12px; font-size:12px; margin-left:10px;" id="btnWebRec">⏺ START RECORD</button>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span id="bleStatus" style="color:var(--muted); font-weight:bold;">Status: Disconnected</span>
+                    <button id="connectBtn" class="action-btn" style="padding: 10px 20px; font-size: 14px;" onclick="toggleBLE()">CONNECT BLE</button>
+                    <button id="resetBtn" class="reset-btn" style="padding: 10px 20px; font-size: 14px;" onclick="resetAllData()">Reset</button>
+                </div>
+            </div>
+                
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-box"><div class="info-label">BLE Target</div><div class="info-value" id="hexAll">Waiting...</div></div>
+            <div class="info-box"><div class="info-label">Packets Recv</div><div class="info-value" id="hexLoss" style="color: #00ff44;">0</div></div>
+            <div class="info-box"><div class="info-label">MAX ADC (24-Bit)</div><div class="info-value">± 8,388,607</div></div>
+            <div class="info-box"><div class="info-label">MAX Voltage (VREF 2.42V)</div><div class="info-value" id="maxMvDisplay" style="color: #00f3ff;">± 403.33 mV</div></div>
+        </div>
+
+        <div id="viewEngineering">
+            <div class="eng-dashboard">
+                <div class="eng-card" style="border-bottom: 3px solid #00f3ff;">
+                    <div class="eng-card-title">⏱️ BLE DURATION</div>
+                    <div class="eng-card-val" id="engConnTime">00:00</div>
+                </div>
+                <div class="eng-card" style="border-bottom: 3px solid #e879f9;">
+                    <div class="eng-card-title">📦 DATA RATE (BATCHES)</div>
+                    <div class="eng-card-val" id="engBatchRate">0 <span style="font-size:14px; color:#94a3b8;">Set/s</span></div>
+                </div>
+                <div class="eng-card" style="border-bottom: 3px solid #f59e0b;">
+                    <div class="eng-card-title">📚 TOTAL SETS RECEIVED</div>
+                    <div class="eng-card-val" id="engTotalSets" style="color: #f59e0b;">0</div>
+                </div>
+                <div class="eng-card" style="border-bottom: 3px solid #00ff44;">
+                    <div class="eng-card-title">📈 TOTAL RAW SAMPLES</div>
+                    <div class="eng-card-val" id="engTotalRaw" style="color: #00ff44;">0</div>
+                </div>
+                <div class="eng-card" style="border-bottom: 3px solid #3b82f6; grid-column: span 4; text-align: left;">
+                    <div class="eng-card-title">📂 MICRO SD CARD FILES (FILE MANAGER)</div>
+                    <div id="fileListDisplay" style="color:#94a3b8; font-family:'JetBrains Mono', monospace; font-size:13px; max-height:120px; overflow-y:auto; background:#000; padding:10px; border-radius:6px; border:1px solid #1e293b;">
+                        *กดปุ่ม "SD CARD" ด้านบนเพื่อดูรายชื่อไฟล์ที่บันทึกไว้
+                    </div>
+                </div>
+            </div>
+            
+            <div class="eng-card" style="border-bottom: 3px solid #e879f9; grid-column: span 4; text-align: left; margin-bottom: 15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select: none;" onclick="toggleRegPanel()">
+                    <div class="eng-card-title" style="margin:0; font-size: 13px; color: #e879f9;">⚙️ ADS1292R HARDWARE REGISTERS (LIVE STATUS)</div>
+                    <div id="regToggleIcon" style="color:#e879f9; font-weight:800; font-size:12px; background:#1e293b; padding:4px 10px; border-radius:4px;">▼ SHOW REGISTERS</div>
+                </div>
+                
+                <div id="regPanel" style="display:none; margin-top:15px; border-top:1px dashed #1e293b; padding-top:15px;">
+                    <div id="regContent" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:10px; font-family:'JetBrains Mono', monospace; font-size:13px; color:#cbd5e1;">
+                        </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#f59e0b;">1. CH1: RESP RAW <span style="color:#6b7280; font-weight:400; font-size:10px;">ADC</span></div><div><span class="val-display" id="val1_ch1" style="color:#f59e0b;">0</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis1_ch1"></div><div class="canvas-stack"><canvas id="bg1_ch1"></canvas><canvas id="fg1_ch1"></canvas></div></div>
+                </div>
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#00ff44;">1. CH2: ECG RAW <span style="color:#6b7280; font-weight:400; font-size:10px;">ADC</span></div><div><span class="val-display" id="val1_ch2" style="color:#00ff44;">0</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis1_ch2"></div><div class="canvas-stack"><canvas id="bg1_ch2"></canvas><canvas id="fg1_ch2"></canvas></div></div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#f59e0b;">2. CH1: ADJUST RAW <span style="color:#6b7280; font-weight:400; font-size:10px;">VOLTAGE</span></div><div><span class="val-display" id="val2_ch1" style="color:#f59e0b;">0.00 mV</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis2_ch1"></div><div class="canvas-stack"><canvas id="bg2_ch1"></canvas><canvas id="fg2_ch1"></canvas></div></div>
+                </div>
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#00ff44;">2. CH2: ADJUST RAW <span style="color:#6b7280; font-weight:400; font-size:10px;">VOLTAGE</span></div><div><span class="val-display" id="val2_ch2" style="color:#00ff44;">0.00 mV</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis2_ch2"></div><div class="canvas-stack"><canvas id="bg2_ch2"></canvas><canvas id="fg2_ch2"></canvas></div></div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#fcd34d;">3. CH1: RESP FILTERED <span style="color:#6b7280; font-weight:400; font-size:10px;">0.1 - 0.5 Hz</span></div><div><span class="val-display" id="val3_ch1" style="color:#fcd34d;">0.00 mV</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis3_ch1"></div><div class="canvas-stack"><canvas id="bg3_ch1"></canvas><canvas id="fg3_ch1"></canvas></div></div>
+                </div>
+                <div class="chart-section">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#00f3ff;">3. CH2: ECG FILTERED <span style="color:#6b7280; font-weight:400; font-size:10px;">0.5 - 40 Hz</span></div><div><span class="val-display" id="val3_ch2" style="color:#00f3ff;">0.00 mV</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis3_ch2"></div><div class="canvas-stack"><canvas id="bg3_ch2"></canvas><canvas id="fg3_ch2"></canvas></div></div>
+                </div>
+
+                <div class="chart-section span-2">
+                    <div class="chart-top-bar"><div class="chart-title" style="color:#ffffff;">4. HEART RATE TREND ❤️ <span style="color:#6b7280; font-weight:400; font-size:10px;">REAL-TIME BPM</span></div><div><span class="val-display" id="val4" style="color:#ffffff;">-- BPM</span></div></div>
+                    <div class="chart-layout"><div class="y-axis" id="yAxis4"></div><div class="canvas-stack"><canvas id="bg4"></canvas><canvas id="fg4"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="viewClinical" class="clinical-view">
+            <div class="clinical-header">
+                <div>
+                    <h3 style="color: #00f3ff; margin: 0 0 5px 0; font-weight: 800; letter-spacing: 1px; font-size: 22px;">ECG LEAD II</h3>
+                    <div class="clin-controls">
+                        <select id="clinFilter" onchange="changeClinicalSettings()">
+                            <option value="BESSEL" selected>Filter: Monitor Bessel (0.5-40Hz) ⭐</option>
+                            <option value="BUTTER">Filter: Monitor Butterworth (0.5-40Hz)</option>
+                            <option value="DIAG">Filter: Diagnosis (0.05-150Hz) [✅ ดีที่สุดสำหรับ Calibration]</option>
+                            <option value="EMG">Filter: ST/EMG (0.5-25Hz)</option>
+                        </select>
+                        <select id="clinSpeed" onchange="changeClinicalSettings()">
+                            <option value="12.5">Speed: 12.5 mm/s</option>
+                            <option value="25" selected>Speed: 25 mm/s</option>
+                            <option value="50">Speed: 50 mm/s</option>
+                        </select>
+                        <select id="clinGain" onchange="changeClinicalSettings()">
+                            <option value="5">Scale: 5 mm/mV</option>
+                            <option value="10" selected>Scale: 10 mm/mV</option>
+                            <option value="20">Scale: 20 mm/mV</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="vital-box">
+                    <div class="vital-title">HEART RATE</div>
+                    <div style="display:flex; align-items:baseline;">
+                        <span class="heart-icon" id="heartIcon">❤️</span>
+                        <span class="vital-value" id="bpmValue">--</span>
+                        <span style="color: #00ff44; font-size: 18px; font-weight:800; margin-left:8px;">BPM</span>
+                    </div>
+                </div>
+            </div>
+            <div class="clin-chart-container">
+                <canvas id="bgClin"></canvas>
+                <canvas id="fgClin"></canvas>
+                <div class="clin-scale-info" id="clinScaleLabel">Scale: 10 mm/mV | Sweep: 25 mm/s</div>
+            </div>
+        </div>
+
+        <div id="viewMetro" class="metro-view">
+            <div class="metro-header">
+                <h2>IEC 60601-2-47 REAL-TIME VALIDATION</h2>
+                <p>แดชบอร์ดทวนสอบความแม่นยำ (อัปเกรดมาตรฐาน ISO: Limit Noise 50μV และระบบแจ้งเตือน Gibbs)</p>
+                <div class="mode-selector">
+                    <label>VALIDATION MODE:</label>
+                    <select id="valMode" onchange="updateValModeUI()">
+                        <option value="AMP">1. ทดสอบความแม่นยำแอมพลิจูด (Amplitude Accuracy)</option>
+                        <option value="BPM">2. ทดสอบอัตราการเต้นหัวใจ (Heart Rate Accuracy)</option>
+                        <option value="NOISE">3. ทดสอบสัญญาณรบกวน (Noise Floor Testing)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="metro-grid">
+                <div class="metro-card" id="cardAmp">
+                    <div>
+                        <h3>1. AMPLITUDE ACCURACY</h3>
+                        
+                        <div class="test-row">
+                            <span class="test-label" style="color:#00f3ff;">แหล่งข้อมูล (Source):</span>
+                            <select id="ampDataSource" class="test-input" style="border-color:#00f3ff; width:130px;" onchange="updateLiveValidation()">
+                                <option value="RAW" selected>RAW ADC (ก่อนกรอง)</option>
+                                <option value="FILTERED">Filtered (หลังกรอง)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="test-row">
+                            <span class="test-label">รูปแบบคลื่น (Waveform):</span>
+                            <select id="ampWaveType" class="test-input" style="width:130px;" onchange="changeAmpWave()">
+                                <option value="SQUARE" selected>Square Wave</option>
+                                <option value="SINE">Sine Wave</option>
+                                <option value="TRI">Triangle Wave</option>
+                                <option value="NSR">NSR ECG (R-Wave)</option>
+                            </select>
+                        </div>
+                        <div class="test-row"><span class="test-label">Rigel Target (mV):</span><input type="number" id="vTargetAmp" class="test-input" style="width:116px;" value="1.00" step="0.01"></div>
+                        
+                        <div class="live-box" id="liveBoxAmp">
+                            <span class="live-label" id="lblLiveAmpSrc" style="color:#00ff44;">● LIVE MEASUREMENT (RAW)</span>
+                            <div style="font-size:12px; color:#6b7280; font-weight:600; margin-bottom:-5px;">Peak-to-Peak</div>
+                            <span class="live-number" id="liveMeasPp">0.000 <span style="font-size:14px; font-weight:400;">mV</span></span>
+                            
+                            <div id="dispRWaveBox" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed #1e293b;">
+                                <div style="font-size:12px; color:#f59e0b; font-weight:600; margin-bottom:-5px;">R-Wave (From Baseline)</div>
+                                <span class="live-number" id="liveMeasRWave" style="color:#f59e0b; font-size:36px;">0.000 <span style="font-size:14px; font-weight:400;">mV</span></span>
+                            </div>
+                        </div>
+                        
+                        <canvas id="valCvsAmp" class="val-canvas"></canvas>
+
+                        <div class="math-eq-box" id="eqBoxRaw">
+                            <span class="hl">Max ADC:</span> <span class="val" id="eqAdcMax">0</span> | <span class="hl">Min ADC:</span> <span class="val" id="eqAdcMin">0</span><br>
+                            <span class="hl">Baseline ADC:</span> <span class="val" id="eqAdcBase">0</span> <span style="font-size:9px;">(Median)</span><br>
+                            <span style="color:#f59e0b;">Volt = ADC * (2420) / (8388607 * Gain)</span>
+                        </div>
+                        <div class="math-eq-box" id="eqBoxFiltered" style="display:none;">
+                            <span class="hl">Max Volt:</span> <span class="val" id="eqFiltMax">0</span> mV | <span class="hl">Min Volt:</span> <span class="val" id="eqFiltMin">0</span> mV<br>
+                            <span class="hl">Baseline Volt:</span> <span class="val" id="eqFiltBase">0</span> mV <span style="font-size:9px;">(Median)</span><br>
+                            <span id="txtFilterWarn" style="color:#ff2a2a; font-size:9px;">*ค่า Filtered ขึ้นอยู่กับการตั้งค่าความถี่หน้า Clinical Tab</span>
+                        </div>
+                        
+                        <div class="math-eq-box" style="margin-top:0;">
+                            <span class="hl">Filter:</span> <span id="eqFilterDesc">2% Clip</span><br>
+                            <span class="hl">Error %:</span> |(<span id="eqMeasAmp">0.000</span> - <span id="eqTarAmp">1.0</span>) / <span id="eqTarAmp2">1.0</span>| * 100
+                        </div>
+                    </div>
+                    <div class="result-box" id="boxAmp">
+                        <div><span style="color:#6b7280; font-size:11px; font-weight:600;">Error Limit: ≤ 5%</span><br><span class="result-val" id="resAmpErr" style="color:#fff;">-- %</span></div>
+                        <div id="tagAmp" style="font-family:'JetBrains Mono', monospace; font-weight:800; color:#475569;">WAITING</div>
+                    </div>
+                </div>
+
+                <div class="metro-card" id="cardBpm">
+                    <div>
+                        <h3>2. HEART RATE & TIME BASE ACCURACY</h3>
+                        
+                        <div class="test-row">
+                            <span class="test-label" style="color:#e879f9;">Test Mode:</span>
+                            <select id="bpmTestMode" class="test-input" style="width:160px; border-color:#e879f9;" onchange="updateBpmModeUI()">
+                                <option value="NSR" selected>1. Heart Rate (NSR)</option>
+                                <option value="TIME">2. Time Base (SQ)</option>
+                            </select>
+                        </div>
+
+                        <div class="test-row">
+                            <span class="test-label" style="color:#00f3ff;">Source:</span>
+                            <select id="bpmDataSource" class="test-input" style="width:160px; border-color:#00f3ff;" onchange="updateBpmModeUI()">
+                                <option value="FILTERED" selected>Filtered Data</option>
+                                <option value="RAW">RAW ADC</option>
+                            </select>
+                        </div>
+                        
+                        <div class="test-row" style="margin-top: 10px;">
+                            <span class="test-label" id="lblTargetBpm">Target (BPM):</span>
+                            <input type="number" id="vTargetBpm" class="test-input" value="60" step="1">
+                        </div>
+                        
+                        <div class="live-box" id="liveBoxBpm" style="border-color:#c026d3; box-shadow: inset 0 0 20px rgba(192,38,211,0.1);">
+                            <span class="live-label" id="lblLiveBpmMode" style="color:#e879f9;">● LIVE HEART RATE</span>
+                            <span class="live-number" id="liveMeasBpm">-- <span style="font-size:16px; font-weight:400;" id="unitBpmMode">BPM</span></span>
+                        </div>
+
+                        <canvas id="valCvsBpm" class="val-canvas"></canvas>
+
+                        <div class="math-eq-box" id="eqBoxNsr">
+                            <span class="hl">Wave Source:</span> <span id="eqSrcNsr" style="color:#f59e0b;">Filtered Data</span><br>
+                            <span class="hl">Error %:</span> |(<span id="eqMeasBpm">0.00</span> - <span id="eqTarBpm">60</span>) / <span id="eqTarBpm2">60</span>| * 100<br>
+                            <span class="hl">Abs Tol:</span> max(1 bpm, Target × 1%) <span style="color:#f59e0b;">[IEC]</span>
+                        </div>
+
+                        <div class="math-eq-box" id="eqBoxTime" style="display:none; border-left-color:#00f3ff;">
+                            <span class="hl">Wave Source:</span> <span id="eqSrcTime" style="color:#f59e0b;">RAW ADC</span><br>
+                            <span class="hl">Target Samples:</span> <span id="eqTxtSps">500</span> SPS / <span id="eqTxtHz">1</span> Hz = <span id="eqEqTarIdeal">500</span><br>
+                            <span class="hl">Error %:</span> |(<span id="eqEqMeas">0</span> - <span id="eqEqTar">500</span>) / <span id="eqEqTar2">500</span>| * 100<br>
+                            <span class="hl">Error Limit:</span> ≤ 1% <span style="color:#f59e0b;">[IEC]</span>
+                        </div>
+                    </div>
+                    <div class="result-box" id="boxBpm">
+                        <div><span style="color:#6b7280; font-size:11px; font-weight:600;" id="lblLimitBpm">Error Limit: ≤ 1 bpm or 1%</span><br><span class="result-val" id="resBpmErr" style="color:#fff;">-- %</span></div>
+                        <div id="tagBpm" style="font-family:'JetBrains Mono', monospace; font-weight:800; color:#475569;">WAITING</div>
+                    </div>
+                </div>
+                <div class="metro-card" id="cardNoise">
+                    <div>
+                        <h3>3. NOISE FLOOR TEST</h3>
+                        <p style="font-size: 10px; color: #ff2a2a; margin-top:-5px; font-weight:600;">*Short circuit LL, RA, RL pins ก่อนเริ่ม</p>
+                        
+                        <div class="live-box" id="liveBoxNoise" style="border-color:#00f3ff; box-shadow: inset 0 0 20px rgba(0,243,255,0.1); margin-top:28px;">
+                            <span class="live-label" style="color:#00f3ff;">● LIVE NOISE P-P (μV)</span>
+                            <span class="live-number" id="liveMeasNoise">0.0 <span style="font-size:16px; font-weight:400;">μV</span></span>
+                        </div>
+
+                        <canvas id="valCvsNoise" class="val-canvas"></canvas>
+
+                        <div class="math-eq-box" style="margin-top:23px;">
+                            <span class="hl">Calculation:</span> RAW P-P Voltage * 1000<br>
+                            <span class="hl">Condition (IEC 60601-2-47):</span> Noise &le; 50 μV 
+                        </div>
+                    </div>
+                    <div class="result-box" id="boxNoise">
+                        <div><span style="color:#6b7280; font-size:11px; font-weight:600;">Max Limit: ≤ 50 μV</span><br><span class="result-val" style="color:#fff;">Check Value</span></div>
+                        <div id="tagNoise" style="font-family:'JetBrains Mono', monospace; font-weight:800; color:#475569;">WAITING</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        'use strict';
+        // ==========================================
+        // 🚀 1. SAFE DOM HELPERS
+        // ==========================================
+        function setText(id, text) { let el = document.getElementById(id); if (el) el.innerText = text; }
+        function setHtml(id, html) { let el = document.getElementById(id); if (el) el.innerHTML = html; }
+        function getVal(id, defaultVal) { let el = document.getElementById(id); return el ? el.value : defaultVal; }
+
+        // ==========================================
+        // 📊 2. MEDICAL SQI & MORPHOLOGY ALGORITHMS
+        // ==========================================
+        let sqiHistory = { rms: [], snr: [], kurt: [], spec: [] };
+        const MAX_TREND_SEC = 60;
+        let morphHistory = { P: [], Q: [], R: [], S: [], T: [] };
+        let sharedLiveRWave = "0.000"; let sharedAvgRWave = "0.000";
+        let syncFlashTime = 0;
+        function calculateMean(buffer) { return buffer.reduce((a, b) => a + b, 0) / buffer.length; }
+        function calculateVariance(buffer, mean) { return buffer.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / buffer.length; }
+        function calculateRMSNoise(rawBuffer) {
+            let mean = calculateMean(rawBuffer);
+            let sumSq = rawBuffer.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0); return Math.sqrt(sumSq / rawBuffer.length);
+        }
+        function calculateSNR(filteredBuffer, rawBuffer) {
+            if(filteredBuffer.length === 0) return 0;
+            let meanFilt = calculateMean(filteredBuffer); let signalPower = calculateVariance(filteredBuffer, meanFilt);
+            let noiseSumSq = 0;
+            for(let i = 0; i < filteredBuffer.length; i++) { let rawMv = adcToMv(rawBuffer[i]); noiseSumSq += Math.pow(rawMv - filteredBuffer[i], 2); }
+            let noisePower = noiseSumSq / filteredBuffer.length;
+            if (noisePower === 0) return 99.9;
+            let snrDb = 10 * Math.log10(signalPower / noisePower); return isFinite(snrDb) ? snrDb : 0;
+        }
+        function calculateKurtosis(filteredBuffer) {
+            if(filteredBuffer.length === 0) return 0;
+            let mean = calculateMean(filteredBuffer); let variance = calculateVariance(filteredBuffer, mean); if (variance === 0) return 0;
+            let m4 = filteredBuffer.reduce((sum, val) => sum + Math.pow(val - mean, 4), 0) / filteredBuffer.length; return m4 / Math.pow(variance, 2);
+        }
+        function calculateSpectralPowerRatio(filteredBuffer, rawBuffer) {
+            if(filteredBuffer.length === 0) return 0;
+            let meanFilt = calculateMean(filteredBuffer); let signalPower = calculateVariance(filteredBuffer, meanFilt);
+            let noiseSumSq = 0;
+            for(let i = 0; i < filteredBuffer.length; i++) { let rawMv = adcToMv(rawBuffer[i]); noiseSumSq += Math.pow(rawMv - filteredBuffer[i], 2); }
+            let hfNoisePower = noiseSumSq / filteredBuffer.length;
+            let totalPower = signalPower + hfNoisePower;
+            if (totalPower === 0) return 0; return (hfNoisePower / totalPower) * 100;
+        }
+
+        function extractMorphology(buffer, sps) {
+            if(buffer.length < sps) return { P: 0, Q: 0, R: 0, S: 0, T: 0 };
+            let msToIdx = (ms) => Math.floor((ms / 1000) * sps);
+            let searchEnd = buffer.length - msToIdx(100);
+            let searchStart = Math.max(0, searchEnd - msToIdx(1200)); 
+            
+            let rVal = -999, rIndex = searchEnd;
+            for(let i = searchStart; i < searchEnd; i++) { if(buffer[i] > rVal) { rVal = buffer[i]; rIndex = i; } }
+            if(rVal < 0.2) return { P: 0, Q: 0, R: 0, S: 0, T: 0 };
+            let qWin = msToIdx(80); let qVal = rVal;
+            for(let i = rIndex - qWin; i < rIndex; i++) { if(i > 0 && buffer[i] < qVal) qVal = buffer[i]; }
+            let sWin = msToIdx(120); let sVal = rVal;
+            for(let i = rIndex; i < rIndex + sWin; i++) { if(i < buffer.length && buffer[i] < sVal) sVal = buffer[i]; }
+            let pWinStart = rIndex - msToIdx(250);
+            let pWinEnd = rIndex - msToIdx(80); let pVal = -999;
+            for(let i = pWinStart; i < pWinEnd; i++) { if(i > 0 && buffer[i] > pVal) pVal = buffer[i]; }
+            let tWinStart = rIndex + msToIdx(150);
+            let tWinEnd = rIndex + msToIdx(450); let tVal = -999;
+            for(let i = tWinStart; i < tWinEnd; i++) { if(i < buffer.length && buffer[i] > tVal) tVal = buffer[i]; }
+            
+            return { P: pVal > -900 ? pVal : 0, Q: qVal < 900 ? qVal : 0, R: rVal, S: sVal < 900 ? sVal : 0, T: tVal > -900 ? tVal : 0 };
+        }
+
+        // ==========================================
+        // 🔬 3. ADVANCED BASELINE REMOVAL DSP
+        // ==========================================
+        class AdvancedBaselineRemover {
+            constructor() {
+                this.mode = 'NONE';
+                this.windowSize = 250; this.buffer = []; this.sum = 0; this.idx = 0;
+                this.ema1 = null; this.ema2 = null;
+                this.alpha = 0.005;
+                this.wBuf1 = []; this.wBuf2 = []; this.wBuf3 = []; this.wSum1 = 0; this.wSum2 = 0;
+                this.wSum3 = 0; this.smartBaseline = null; 
+            }
+            setMode(mode, sps) {
+                this.mode = mode;
+                this.windowSize = Math.floor(sps * 0.6); this.buffer = new Array(this.windowSize).fill(0);
+                this.wBuf1 = new Array(this.windowSize).fill(0); this.wBuf2 = new Array(this.windowSize).fill(0);
+                this.wBuf3 = new Array(this.windowSize).fill(0);
+                this.sum = 0; this.wSum1 = 0; this.wSum2 = 0; this.wSum3 = 0; this.idx = 0;
+                this.alpha = (2 * Math.PI * 0.5) / sps; this.ema1 = null; this.smartBaseline = null;
+            }
+            process(val) {
+                if (this.mode === 'NONE') return val;
+                if (this.mode === 'SMART_FLAT') {
+                    if (this.smartBaseline === null) this.smartBaseline = val;
+                    let diff = Math.abs(val - this.smartBaseline);
+                    if (diff < 0.15) this.smartBaseline = (this.smartBaseline * 0.99) + (val * 0.01);
+                    else this.smartBaseline = (this.smartBaseline * 0.9999) + (val * 0.0001);
+                    return val - this.smartBaseline;
+                }
+                
+                if (this.mode === 'MA') {
+                    let old = this.buffer[this.idx];
+                    this.buffer[this.idx] = val; this.sum = this.sum - old + val;
+                    this.idx = (this.idx + 1) % this.windowSize;
+                    return val - (this.sum / this.windowSize); 
+                }
+                if (this.mode === 'POLY') {
+                    if (this.ema1 === null) { this.ema1 = val;
+                        this.ema2 = val; }
+                    this.ema1 = (this.alpha * val) + ((1 - this.alpha) * this.ema1);
+                    this.ema2 = (this.alpha * this.ema1) + ((1 - this.alpha) * this.ema2);
+                    return val - ((2 * this.ema1) - this.ema2);
+                }
+                if (this.mode === 'WAVELET') {
+                    let old1 = this.wBuf1[this.idx];
+                    this.wBuf1[this.idx] = val; this.wSum1 = this.wSum1 - old1 + val; let avg1 = this.wSum1 / this.windowSize;
+                    let old2 = this.wBuf2[this.idx];
+                    this.wBuf2[this.idx] = avg1; this.wSum2 = this.wSum2 - old2 + avg1; let avg2 = this.wSum2 / this.windowSize;
+                    let old3 = this.wBuf3[this.idx];
+                    this.wBuf3[this.idx] = avg2; this.wSum3 = this.wSum3 - old3 + avg2; let baseline = this.wSum3 / this.windowSize;
+                    this.idx = (this.idx + 1) % this.windowSize; return val - baseline;
+                }
+                return val;
+            }
+        }
+        // 🌟 แยกตัวกรอง Baseline เป็น 2 ท่อ (ปอด กับ หัวใจ จะได้ไม่กวนกัน)
+        const advBaselineCh1 = new AdvancedBaselineRemover();
+        const advBaselineCh2 = new AdvancedBaselineRemover();
+        // ==========================================
+        // 🚀 4. MEDICAL DSP FILTERS (REVERTED TO ROCK-SOLID STATE)
+        // ==========================================
+        class IIRFilter {
+            constructor(b, a) { this.b = b;
+                this.a = a; this.x1 = 0; this.x2 = 0; this.y1 = 0; this.y2 = 0;
+            }
+            process(val) {
+                let out = this.b[0]*val + this.b[1]*this.x1 + this.b[2]*this.x2 - this.a[1]*this.y1 - this.a[2]*this.y2;
+                out /= this.a[0];
+                this.x2 = this.x1; this.x1 = val; this.y2 = this.y1; this.y1 = out; return out;
+            }
+            reset() { this.x1 = 0; this.x2 = 0;
+                this.y1 = 0; this.y2 = 0; }
+        }
+        const hpf_0_5 = new IIRFilter([0.995567, -1.991134, 0.995567], [1.0, -1.991114, 0.991154]);
+        const notch_50 = new IIRFilter([0.990232, -1.602280, 0.990232], [1.0, -1.602280, 0.980464]);
+        const lpf_40 = new IIRFilter([0.052758, 0.105517, 0.052758], [1.0, -1.163273, 0.374306]);
+        const lpf_150 = new IIRFilter([0.442805, 0.885611, 0.442805], [1.0, 0.518654, 0.252568]);
+        const lpf_25 = new IIRFilter([0.020083, 0.040167, 0.020083], [1.0, -1.561018, 0.641352]);
+        const hpf_resp = new IIRFilter([0.999686, -1.999372, 0.999686], [1.000000, -1.999371, 0.999373]); // ตัดไฟ DC ขยะ
+        const lpf_resp = new IIRFilter([0.00003913, 0.00007826, 0.00003913], [1.000000, -1.982228, 0.982385]); // ตัดยอดแหลมคลื่นหัวใจทิ้ง
+        // 🌟🌟🌟 เพิ่ม Class กรอง RESP แบบเนียนกริบ (Cascade Filter) 🌟🌟🌟
+        class RespFilter {
+            constructor() {
+                this.alpha = 0.999; // Highpass ดึงกราฟกลับ 0
+                this.lastX = 0;
+                this.lastY = 0;
+                this.maBuffer = new Array(500).fill(0); // ค่าเฉลี่ย 500 ตัว (1 วินาทีพอดี) หักล้างหัวใจทิ้ง
+                this.maIndex = 0;
+                this.maSum = 0;
+            }
+            process(rawVal) {
+                // 1. Lowpass (ค่าเฉลี่ยแบบเกลี่ยให้เรียบ)
+                this.maSum -= this.maBuffer[this.maIndex];
+                this.maBuffer[this.maIndex] = rawVal;
+                this.maSum += rawVal;
+                this.maIndex = (this.maIndex + 1) % 500;
+                let val = this.maSum / 500;
+
+                // 2. Highpass (DC Blocker)
+                let y = val - this.lastX + this.alpha * this.lastY;
+                this.lastX = val;
+                this.lastY = y;
+                return y;
+            }
+        }
+        const respDSP = new RespFilter(); // สร้างตัวแปรเตรียมไว้
+        // ==========================================
+        // 📡 5. VARIABLES & STATE
+        // ==========================================
+        const SERVICE_UUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
+        const CHAR_TX_UUID = '19b10001-e8f2-537e-4f6c-d104768a1214'; 
+        const CHAR_RX_UUID = '19b10002-e8f2-537e-4f6c-d104768a1214';
+        const CHAR_TIME_UUID = '19b10003-e8f2-537e-4f6c-d104768a1214'; // 🌟 เพิ่ม UUID เวลา
+        let bleDevice = null, bleTxChar = null, bleRxChar = null, bleTimeChar = null, connected = false;
+        let currentSps = 500; let customCalFactor = 1.0; 
+        
+        // 🌟 ตัวแปรชุดใหม่สำหรับแสดงผล Dashboard
+        let packetCounter = 0; 
+        let rxQueueCh1 = []; // 🌟 คิวสำหรับปอด
+        let rxQueueCh2 = []; // 🌟 คิวสำหรับหัวใจ
+        let connStartTime = null;
+        let lastBatchCount = 0;
+        let lastRateCalcTime = 0;
+
+        let bpm = 0, lastBeatTime = 0, rrHistory = [], recentBPMs = [];
+        let globalSampleIndex = 0, peakState = 0, currentMaxV = 0, currentMaxTime = 0, rollingMax = 0.5;
+        let valBufferAdc = new Array(1000).fill(0); let valBufferFiltered = new Array(1000).fill(0); let ampHistory = [];
+        function adcToMv(adc) {
+            let gainStr = getVal("gainSelect", '6');
+            let actGain = (gainStr === 'm' || gainStr === 'M') ? 12 : parseInt(gainStr);
+            return adc * (2420.0 / (8388607.0 * actGain)) * customCalFactor;
+        }
+
+        // ==========================================
+        // 📈 6. CHART ENGINES
+        // ==========================================
+        class TurboSweepChart {
+            constructor(fgId, bgId, axisId, color, isBpm = false) {
+                this.canvas = document.getElementById(fgId);
+                this.bgCanvas = document.getElementById(bgId);
+                if(!this.canvas || !this.bgCanvas) return; 
+                this.ctx = this.canvas.getContext('2d'); this.bgCtx = this.bgCanvas.getContext('2d', { alpha: false });
+                this.width = this.canvas.width = this.bgCanvas.width = this.canvas.offsetWidth;
+                this.height = this.canvas.height = this.bgCanvas.height = this.canvas.offsetHeight;
+                this.x = 0; this.scanSpeed = 1.0;
+                this.color = color; this.renderQueue = []; this.dataBuffer = []; 
+                this.bufferSize = Math.floor(this.width / this.scanSpeed) || 1000; this.cMax = 10;
+                this.cMin = -10; this.axisDiv = document.getElementById(axisId); this.isBpm = isBpm;
+                this.reset(); this.drawGrid();
+            }
+            resize() {
+                if (this.canvas && this.canvas.offsetWidth > 0) {
+                    this.width = this.canvas.width = this.bgCanvas.width = this.canvas.offsetWidth;
+                    this.height = this.canvas.height = this.bgCanvas.height = this.canvas.offsetHeight;
+                    this.bufferSize = Math.floor(this.width / this.scanSpeed) || 1000; this.reset(); this.drawGrid();
+                }
+            }
+            setScanSpeed(newSpeed) { this.scanSpeed = newSpeed;
+                if (this.width > 0) this.bufferSize = Math.floor(this.width / this.scanSpeed); }
+            drawGrid() {
+                if(!this.bgCtx) return;
+                this.bgCtx.fillStyle = '#050505'; this.bgCtx.fillRect(0,0, this.width, this.height);
+                this.bgCtx.strokeStyle = '#1e293b'; this.bgCtx.lineWidth = 1; this.bgCtx.beginPath();
+                for(let i=1; i<4; i++) { let y = i * (this.height/4); this.bgCtx.moveTo(0, y); this.bgCtx.lineTo(this.width, y);
+                }
+                for(let i=1; i<10; i++) { let x = i * (this.width/10);
+                this.bgCtx.moveTo(x, 0); this.bgCtx.lineTo(x, this.height); }
+                this.bgCtx.stroke();
+            }
+            queueData(val) { this.dataBuffer.push(val); if (this.dataBuffer.length > this.bufferSize) this.dataBuffer.shift();
+                this.renderQueue.push(val); }
+            renderFrame() {
+                if (this.renderQueue.length === 0 || !this.ctx) return;
+                if (!this.isBpm && this.dataBuffer.length > 0) {
+                    let sorted = [...this.dataBuffer].sort((a,b) => a-b);
+                    let currentMax = sorted[Math.floor(sorted.length * 0.98)]; 
+                    let currentMin = sorted[Math.floor(sorted.length * 0.02)]; 
+                    let span = currentMax - currentMin;
+                    if (span < 0.001) span = 1;
+                    let targetMax = currentMax + (span * 0.15);
+                    let targetMin = currentMin - (span * 0.15);
+                    if (Math.abs(targetMax - this.cMax) > Math.abs(this.cMax * 2)) { this.cMax = targetMax;
+                        this.cMin = targetMin; } else { this.cMax += (targetMax - this.cMax) * 0.1; this.cMin += (targetMin - this.cMin) * 0.1;
+                    }
+                }
+                if (this.axisDiv) {
+                    this.frameCounter = (this.frameCounter || 0) + 1;
+                    if (this.frameCounter % 15 === 0) { 
+                        let step = (this.cMax - this.cMin) / 4;
+                        let d = this.isBpm ? 0 : 2;
+                        this.axisDiv.innerHTML = `<span>${this.cMax.toFixed(d)}</span><span>${(this.cMin + step*3).toFixed(d)}</span><span>${(this.cMin + step*2).toFixed(d)}</span><span>${(this.cMin + step*1).toFixed(d)}</span><span>${this.cMin.toFixed(d)}</span>`;
+                    }
+                }
+                this.ctx.lineWidth = 1.5;
+                this.ctx.strokeStyle = this.color; this.ctx.beginPath(); 
+                for (let i = 0; i < this.renderQueue.length; i++) {
+                    let val = this.renderQueue[i];
+                    let drawSpan = this.cMax - this.cMin; let y = this.height - ((val - this.cMin) / drawSpan) * this.height;
+                    this.ctx.clearRect(this.x, 0, this.scanSpeed + 15, this.height);
+                    let yZero = this.height - ((0 - this.cMin) / drawSpan) * this.height;
+                    if (yZero > 0 && yZero < this.height) { this.ctx.fillStyle = 'rgba(255,255,255,0.1)'; this.ctx.fillRect(this.x, yZero, this.scanSpeed, 1);
+                    }
+                    if (this.x === 0) this.ctx.moveTo(0, y);
+                    else this.ctx.moveTo(this.x - this.scanSpeed, this.lastY);
+                    this.ctx.lineTo(this.x, y); this.lastY = y; this.x += this.scanSpeed;
+                    if (this.x >= this.width) { this.ctx.stroke(); this.ctx.beginPath();
+                        this.x = 0; }
+                }
+                this.ctx.stroke();
+                this.renderQueue = []; 
+            }
+            reset() { if(this.ctx) this.ctx.clearRect(0, 0, this.width, this.height);
+                this.x = 0; this.renderQueue = []; }
+        }
+
+        class ClinicalChart {
+            constructor(fgId, bgId) {
+                this.canvas = document.getElementById(fgId);
+                this.bgCanvas = document.getElementById(bgId);
+                if(!this.canvas || !this.bgCanvas) return;
+                this.ctx = this.canvas.getContext('2d'); this.bgCtx = this.bgCanvas.getContext('2d', { alpha: false });
+                this.width = 0;
+                this.x = 0; this.scanSpeed = 1.5; this.renderQueue = []; this.cMax = 2.0; this.cMin = -2.0;
+            }
+            setScanSpeed(newSpeed) { this.scanSpeed = newSpeed;
+            }
+            resize() {
+                if (this.canvas && this.canvas.offsetWidth > 0) {
+                    this.width = this.canvas.width = this.bgCanvas.width = this.canvas.offsetWidth;
+                    this.height = this.canvas.height = this.bgCanvas.height = this.canvas.offsetHeight;
+                    this.reset(); this.drawGrid();
+                }
+            }
+            drawGrid() {
+                if(!this.bgCtx) return;
+                this.bgCtx.fillStyle = '#f8fafc'; this.bgCtx.fillRect(0,0, this.width, this.height);
+                this.bgCtx.lineWidth = 1; this.bgCtx.strokeStyle = '#fca5a5'; this.bgCtx.beginPath();
+                for(let x=0; x<this.width; x+=10) { this.bgCtx.moveTo(x,0); this.bgCtx.lineTo(x,this.height);
+                }
+                for(let y=0; y<this.height; y+=10) { this.bgCtx.moveTo(0,y);
+                this.bgCtx.lineTo(this.width,y); }
+                this.bgCtx.stroke();
+                this.bgCtx.lineWidth = 1.5; this.bgCtx.strokeStyle = '#ef4444'; this.bgCtx.beginPath();
+                for(let x=0; x<this.width; x+=50) { this.bgCtx.moveTo(x,0); this.bgCtx.lineTo(x,this.height);
+                }
+                for(let y=0; y<this.height; y+=50) { this.bgCtx.moveTo(0,y);
+                this.bgCtx.lineTo(this.width,y); }
+                this.bgCtx.stroke();
+            }
+            queueData(val) { this.renderQueue.push(val);
+            }
+            renderFrame() {
+                if (this.renderQueue.length === 0 || this.width === 0 || !this.ctx) return;
+                this.ctx.lineWidth = 2.0; this.ctx.strokeStyle = '#0f172a'; this.ctx.beginPath(); 
+                for (let i = 0; i < this.renderQueue.length; i++) {
+                    let val = this.renderQueue[i];
+                    let drawSpan = this.cMax - this.cMin; let y = this.height - ((val - this.cMin) / drawSpan) * this.height;
+                    this.ctx.clearRect(this.x, 0, this.scanSpeed + 25, this.height);
+                    let yZero = this.height - ((0 - this.cMin) / drawSpan) * this.height;
+                    if (yZero > 0 && yZero < this.height) { this.ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'; this.ctx.fillRect(this.x, yZero, this.scanSpeed, 1);
+                    }
+                    if (this.x === 0) this.ctx.moveTo(0, y);
+                    else this.ctx.moveTo(this.x - this.scanSpeed, this.lastY);
+                    this.ctx.lineTo(this.x, y); this.lastY = y; this.x += this.scanSpeed;
+                    if (this.x >= this.width) { this.ctx.stroke(); this.ctx.beginPath();
+                        this.x = 0; }
+                }
+                this.ctx.stroke();
+                this.renderQueue = []; 
+            }
+            reset() { if(this.ctx) this.ctx.clearRect(0, 0, this.width, this.height);
+                this.x = 0; this.renderQueue = []; }
+        }
+
+        // 🌟 ประกาศกราฟทั้ง 6 จอ
+        var chart1_ch1 = new TurboSweepChart('fg1_ch1', 'bg1_ch1', 'yAxis1_ch1', '#f59e0b');
+        var chart1_ch2 = new TurboSweepChart('fg1_ch2', 'bg1_ch2', 'yAxis1_ch2', '#00ff44');
+        var chart2_ch1 = new TurboSweepChart('fg2_ch1', 'bg2_ch1', 'yAxis2_ch1', '#f59e0b');
+        var chart2_ch2 = new TurboSweepChart('fg2_ch2', 'bg2_ch2', 'yAxis2_ch2', '#00ff44');
+        var chart3_ch1 = new TurboSweepChart('fg3_ch1', 'bg3_ch1', 'yAxis3_ch1', '#fcd34d');
+        var chart3_ch2 = new TurboSweepChart('fg3_ch2', 'bg3_ch2', 'yAxis3_ch2', '#00f3ff');
+        var chart4 = new TurboSweepChart('fg4', 'bg4', 'yAxis4', '#ffffff', true); 
+        if(chart4) { chart4.cMax = 180; chart4.cMin = 40; }
+        var clinChart = new ClinicalChart('fgClin', 'bgClin');
+        // ==========================================
+        // 💓 7. HEART RATE DETECTION
+        // ==========================================
+        function processBeat(timeMs) {
+            if (lastBeatTime > 0) {
+                let rr = timeMs - lastBeatTime;
+                if (rr > 150 && rr < 3000) {
+                    rrHistory.push(rr);
+                    if (rrHistory.length > 500) rrHistory.shift(); 
+                    let instBpm = 60000 / rr;
+                    recentBPMs.push(instBpm); if (recentBPMs.length > 3) recentBPMs.shift();
+                    bpm = recentBPMs.reduce((a, b) => a + b, 0) / recentBPMs.length;
+                    
+                    setText('bpmValue', Math.round(bpm));
+                    let h = document.getElementById('heartIcon');
+                    if(h) { h.style.transform = "scale(1.3)"; setTimeout(() => h.style.transform = "scale(1)", 120);
+                    }
+                }
+            }
+            lastBeatTime = timeMs;
+        }
+
+        // 🌟 ตัวแปรและ Algorithm สำหรับ Time Base (นับ Sample ขอบถึงขอบ)
+        let sqPhase = 0;
+        let sqCounter = 0;
+        let measuredSqSamples = 0;
+
+        function detectSquareWave(val_mV) {
+            sqCounter++;
+            if (sqPhase === 0 && val_mV < -0.2) {
+                sqPhase = 1; // เจอขอบขาลง
+            } else if (sqPhase === 1 && val_mV > 0.2) {
+                measuredSqSamples = sqCounter; // จดจำนวน Sample ทั้งหมดใน 1 รอบ
+                sqCounter = 0;
+                sqPhase = 0;
+            }
+        }
+
+        function detectHeartRate(val_mV, timeMs) {
+            rollingMax *= 0.9995;
+            if (val_mV > rollingMax) rollingMax = val_mV;
+            let threshold = rollingMax * 0.6;
+            if (peakState === 0) {
+                // 🌟 หน่วง 150ms เพื่อให้รองรับ 300-400 BPM 
+                if (val_mV > threshold && (timeMs - lastBeatTime > 150)) { peakState = 1;
+                    currentMaxV = val_mV; currentMaxTime = timeMs; }
+            } else if (peakState === 1) {
+                if (val_mV > currentMaxV) { currentMaxV = val_mV;
+                    currentMaxTime = timeMs; }
+                if (val_mV < threshold || (timeMs - currentMaxTime > 50)) { 
+                    processBeat(currentMaxTime);
+                    peakState = 0; 
+                    
+                    // 🌟 จุดไฟ SYNC ทันที
+                    syncFlashTime = 15;
+                }
+            }
+        }
+
+        function drawTrendGraph(canvasId, dataArray, color) {
+            let cvs = document.getElementById(canvasId);
+            if(!cvs) return;
+            let ctx = cvs.getContext('2d'); let w = cvs.width = cvs.offsetWidth; let h = cvs.height = cvs.offsetHeight;
+            ctx.clearRect(0, 0, w, h);
+            if(dataArray.length === 0) return;
+            let dMin = Math.min(...dataArray); let dMax = Math.max(...dataArray);
+            if(dMax === dMin) { dMax += 1; dMin -= 1;
+            }
+            let span = dMax - dMin;
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+            for(let i=0; i<dataArray.length; i++) {
+                let x = (i / (MAX_TREND_SEC - 1)) * w;
+                let y = h - (((dataArray[i] - dMin) / span) * h * 0.8 + (h * 0.1));
+                if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // ==========================================
+        // ✅ 8. UI LOGIC & SETTINGS
+        // ==========================================
+        function updateCalFactor() {
+            let el = document.getElementById("calFactorInput");
+            if(el) { customCalFactor = parseFloat(el.value) || 1.0; updateMaxValues(); }
+        }
+
+        function updateMaxValues() {
+            let gainChar = getVal("gainSelect", '6');
+            let actualGain = (gainChar === 'm' || gainChar === 'M') ? 12 : parseInt(gainChar);
+            let maxMv = 2420 / actualGain;
+            setText("maxMvDisplay", "± " + (maxMv * customCalFactor).toFixed(2) + " mV");
+            if (connected) sendCmd(gainChar === 'm' ? 'M' : gainChar);
+            updateRegistersUI();
+        }
+
+        // 🌟 ตัวแปรสถานะ
+        let isTestSignal = false;
+        let isNoiseTest = false;
+        let isRldOn = true;
+
+        // 🌟 ฟังก์ชัน 1: ปุ่ม TEST (1Hz Square Wave)
+        function toggleTestSignal() {
+            isTestSignal = !isTestSignal;
+            let btn = document.getElementById('testSigBtn');
+            let noiseBtn = document.getElementById('noiseTestBtn');
+            
+            if(isTestSignal) {
+                // ปิด Noise โหมดอัตโนมัติ (กันบอร์ดงง)
+                if(isNoiseTest) toggleNoiseTest(); 
+                
+                btn.innerText = 'TEST: ON';
+                btn.style.background = '#ef4444'; // แดง
+                btn.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
+                if(connected) sendCmd('T'); 
+            } else {
+                btn.innerText = 'TEST: OFF';
+                btn.style.background = '#8b5cf6'; // ม่วง
+                btn.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.4)';
+                if(connected) sendCmd('N'); 
+            }
+            updateRegistersUI();
+        }
+
+        // 🌟 ฟังก์ชัน 2: ปุ่ม NOISE (Internal Short)
+        function toggleNoiseTest() {
+            isNoiseTest = !isNoiseTest;
+            let btn = document.getElementById('noiseTestBtn');
+            let testBtn = document.getElementById('testSigBtn');
+
+            if(isNoiseTest) {
+                // ปิด Test โหมดอัตโนมัติ (กันบอร์ดงง)
+                if(isTestSignal) toggleTestSignal();
+                
+                btn.innerText = 'NOISE: ON';
+                btn.style.background = '#ef4444'; // แดง
+                btn.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
+                if(connected) sendCmd('S'); 
+            } else {
+                btn.innerText = 'NOISE: OFF';
+                btn.style.background = '#3b82f6'; // น้ำเงิน
+                btn.style.boxShadow = '0 0 10px rgba(59, 130, 246, 0.4)';
+                if(connected) sendCmd('N'); 
+            }
+            updateRegistersUI();
+        }
+
+        // 🌟 ฟังก์ชันควบคุมวงจร RLD (ส่งคำสั่งไปบอร์ด พร้อมสลับสีปุ่มเตือน)
+        async function toggleRld() {
+            if(!connected) { alert("กรุณาเชื่อมต่อ BLE ก่อนครับ!"); return; }
+            isRldOn = !isRldOn;
+            let btn = document.getElementById('rldBtn');
+
+            if(isRldOn) {
+                btn.innerText = 'RLD: ON';
+                btn.style.background = '#10b981'; // เขียวสด
+                btn.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.4)';
+                await sendCmd('X'); // ส่ง X เพื่อเปิด Active Noise Cancellation (0x2C)
+            } else {
+                btn.innerText = 'RLD: OFF';
+                btn.style.background = '#f59e0b'; // ส้มเตือนภัย
+                btn.style.boxShadow = '0 0 15px rgba(245, 158, 11, 0.6)';
+                await sendCmd('Y'); // ส่ง Y เพื่อถอยกลับไปใช้แค่ไฟ Bias นิ่งๆ (0x20)
+            }
+            updateRegistersUI();
+        }
+
+        function changeSps() {
+            currentSps = parseInt(getVal("spsSelect", '500'));
+            setText("eqSpsDisplay", currentSps); 
+            // 🌟 [แก้ตรงนี้] เปลี่ยน A, B, C เป็นตัวพิมพ์เล็ก a, b, c เพื่อหลบคำสั่งระบบ
+            const map = {250:'a', 500:'b', 1000:'c'}; 
+            if (connected) sendCmd(map[currentSps] || 'b');
+            changeClinicalSettings(); resetAllData();
+            updateRegistersUI();
+        }
+
+        function changeClinicalSettings() {
+            let speed = parseFloat(getVal("clinSpeed", '25'));
+            let gainScale = parseInt(getVal("clinGain", '10'));
+            let engVisibleSec = 5.0; 
+            if (chart1_ch1 && chart1_ch1.width > 0) {
+                chart1_ch1.setScanSpeed(chart1_ch1.width / (currentSps * engVisibleSec));
+                chart1_ch2.setScanSpeed(chart1_ch2.width / (currentSps * engVisibleSec));
+                chart2_ch1.setScanSpeed(chart2_ch1.width / (currentSps * engVisibleSec));
+                chart2_ch2.setScanSpeed(chart2_ch2.width / (currentSps * engVisibleSec));
+                chart3_ch1.setScanSpeed(chart3_ch1.width / (currentSps * engVisibleSec));
+                chart3_ch2.setScanSpeed(chart3_ch2.width / (currentSps * engVisibleSec));
+                chart4.setScanSpeed(chart4.width / (currentSps * 10.0));
+            }
+            if (clinChart && clinChart.width > 0) { 
+                let clinVisibleSec = (25.0 / speed) * 5.0;
+                clinChart.setScanSpeed(clinChart.width / (currentSps * clinVisibleSec)); 
+            }
+            if (gainScale === 10) { clinChart.cMax = 2.0; clinChart.cMin = -2.0; } 
+            else if (gainScale === 20) { clinChart.cMax = 1.0; clinChart.cMin = -1.0; } 
+            else if (gainScale === 5) { clinChart.cMax = 4.0; clinChart.cMin = -4.0; } 
+            setText("clinScaleLabel", `Scale: ${gainScale} mm/mV | Sweep: ${speed} mm/s`);
+            clinChart.reset();
+        }
+
+        function switchMode(mode) {
+            let elEng = document.getElementById('viewEngineering');
+            if(elEng) elEng.style.display = (mode === 'eng') ? 'block' : 'none';
+            let elClin = document.getElementById('viewClinical');
+            if(elClin) elClin.style.display = (mode === 'clin') ? 'block' : 'none';
+            let elMetro = document.getElementById('viewMetro');
+            if(elMetro) elMetro.style.display = (mode === 'metro') ? 'block' : 'none';
+            let bEng = document.getElementById('btnEng');
+            if(bEng) bEng.className = (mode === 'eng') ? 'tab-btn active' : 'tab-btn';
+            let bClin = document.getElementById('btnClin');
+            if(bClin) bClin.className = (mode === 'clin') ? 'tab-btn active' : 'tab-btn';
+            let bMetro = document.getElementById('btnMetro');
+            if(bMetro) bMetro.className = (mode === 'metro') ? 'tab-btn active tab-btn-metro' : 'tab-btn tab-btn-metro';
+            setTimeout(() => {
+                if (mode === 'eng') { 
+                    chart1_ch1.resize(); chart1_ch2.resize(); 
+                    chart2_ch1.resize(); chart2_ch2.resize(); 
+                    chart3_ch1.resize(); chart3_ch2.resize(); 
+                    chart4.resize(); 
+                } else if (mode === 'clin') { clinChart.resize(); } 
+                else if (mode === 'metro') {
+                    let csAmp = document.getElementById('valCvsAmp'); if(csAmp) { csAmp.width = csAmp.offsetWidth; csAmp.height = csAmp.offsetHeight; }
+           
+                    let csBpm = document.getElementById('valCvsBpm'); if(csBpm) { csBpm.width = csBpm.offsetWidth; csBpm.height = csBpm.offsetHeight; }
+                    let csNoise = document.getElementById('valCvsNoise'); if(csNoise) { csNoise.width = csNoise.offsetWidth; csNoise.height = csNoise.offsetHeight; }
+                    let cvsIds = ['cvsRms', 'cvsSnr', 'cvsKurt', 'cvsSpec']; cvsIds.forEach(id => { let c = document.getElementById(id); if(c) { c.width = c.offsetWidth; c.height = c.offsetHeight; } });
+    
+                }
+            }, 50);
+        }
+
+        function resetAllData() {
+            bpm = 0; sqPhase = 0; sqCounter = 0; measuredSqSamples = 0;
+            globalSampleIndex = 0; peakState = 0; currentMaxV = 0; currentMaxTime = 0;
+            lastBeatTime = 0; rollingMax = 0.5; rrHistory = []; recentBPMs = []; ampHistory = [];
+            sqiHistory = { rms: [], snr: [], kurt: [], spec: [] };
+            morphHistory = { P: [], Q: [], R: [], S: [], T: [] }; 
+            sharedLiveRWave = "0.000"; sharedAvgRWave = "0.000"; syncFlashTime = 0;
+            setText('bpmValue', "--"); setText('val4', "-- BPM"); 
+            rxQueueCh1 = []; rxQueueCh2 = []; // 🌟 ล้างคิวให้สะอาด
+            
+            packetCounter = 0; connStartTime = Date.now(); lastBatchCount = 0;
+            setText('engTotalSets', "0"); setText('engTotalRaw', "0"); setText('engConnTime', "00:00");
+            setHtml('engBatchRate', `0 <span style="font-size:14px; color:#94a3b8;">Set/s</span>`);
+            let lossEl = document.getElementById("hexLoss") || document.getElementById("pktCount") || document.getElementById("infoPkt"); 
+            if (lossEl) lossEl.innerText = "0";
+            
+            if(chart1_ch1) {
+                chart1_ch1.reset(); chart1_ch2.reset(); 
+                chart2_ch1.reset(); chart2_ch2.reset(); 
+                chart3_ch1.reset(); chart3_ch2.reset(); 
+                chart4.reset(); clinChart.reset();
+            }
+            
+            valBufferAdc.fill(0); valBufferFiltered.fill(0);
+            hpf_0_5.reset(); notch_50.reset(); lpf_40.reset(); lpf_150.reset(); lpf_25.reset();
+            if(advBaselineCh1) {
+                let m = document.getElementById("advDspSelect")?.value || 'SMART_FLAT';
+                advBaselineCh1.setMode(m, currentSps); advBaselineCh2.setMode(m, currentSps);
+            }
+        }
+
+        function drawSimpleChart(canvasId, buffer, color, customScale) {
+            let canvas = document.getElementById(canvasId);
+            if(!canvas) return;
+            let w = canvas.width = canvas.offsetWidth; let h = canvas.height = canvas.offsetHeight;
+            if (w === 0 || h === 0) return; 
+            let ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1; ctx.beginPath();
+            for(let i=0; i<w; i+=25) { ctx.moveTo(i, 0); ctx.lineTo(i, h);
+            }
+            for(let i=0; i<h; i+=25) { ctx.moveTo(0, i);
+            ctx.lineTo(w, i); }
+            ctx.stroke();
+            // ใช้ 2% เพื่อกันหน้าจอแบนแต๊ดแต๋จาก Noise
+            let sorted = [...buffer].sort((a,b) => a-b);
+            let safeMin = sorted[Math.floor(buffer.length * 0.02)]; let safeMax = sorted[Math.floor(buffer.length * 0.98)];
+            let span = customScale ?
+            customScale : (safeMax - safeMin); if (span === 0 || !isFinite(span)) span = 1;
+            let mid = (safeMax + safeMin) / 2;
+
+            ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+            for(let i=0; i<buffer.length; i++) {
+                let x = (i / buffer.length) * w;
+                let val = Math.max(safeMin - span*0.5, Math.min(safeMax + span*0.5, buffer[i]));
+                let y = h/2 - ((val - mid) / span) * (h * 0.8);
+                if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+        }
+
+        function updateLiveValidation() {
+            let metroView = document.getElementById('viewMetro');
+            if (!metroView || metroView.style.display === 'none' || !connected) return;
+
+            let noiseMv = 0;
+            if (valBufferAdc.length > 50) {
+                // 🌟 ระบบ Noise Floor ตามมาตรฐาน IEC: หา Absolute Max-Min เพียวๆ ไม่ตัดอะไรทิ้ง
+                let maxAdcNoise = Math.max(...valBufferAdc);
+                let minAdcNoise = Math.min(...valBufferAdc);
+                noiseMv = adcToMv(maxAdcNoise - minAdcNoise);
+            }
+
+            // 🌟 1. วัดค่า Morphology 
+            if (valBufferFiltered.length >= 500 && globalSampleIndex % Math.floor(currentSps/2) === 0) {
+                let morph = extractMorphology(valBufferFiltered, currentSps);
+                if (morph.R > 0.2) {
+                    morphHistory.P.push(morph.P);
+                    if(morphHistory.P.length > 5) morphHistory.P.shift();
+                    morphHistory.Q.push(morph.Q); if(morphHistory.Q.length > 5) morphHistory.Q.shift();
+                    morphHistory.R.push(morph.R); if(morphHistory.R.length > 5) morphHistory.R.shift();
+                    morphHistory.S.push(morph.S); if(morphHistory.S.length > 5) morphHistory.S.shift();
+                    morphHistory.T.push(morph.T);
+                    if(morphHistory.T.length > 5) morphHistory.T.shift();
+                }
+                let avgP = (morphHistory.P.reduce((a,b)=>a+b,0) / Math.max(1, morphHistory.P.length)).toFixed(3);
+                let avgQ = (morphHistory.Q.reduce((a,b)=>a+b,0) / Math.max(1, morphHistory.Q.length)).toFixed(3);
+                let avgR = (morphHistory.R.reduce((a,b)=>a+b,0) / Math.max(1, morphHistory.R.length)).toFixed(3);
+                let avgS = (morphHistory.S.reduce((a,b)=>a+b,0) / Math.max(1, morphHistory.S.length)).toFixed(3);
+                let avgT = (morphHistory.T.reduce((a,b)=>a+b,0) / Math.max(1, morphHistory.T.length)).toFixed(3);
+
+                sharedLiveRWave = morph.R.toFixed(3); sharedAvgRWave = avgR;
+                setText("txtPLive", morph.P.toFixed(3)); setText("txtQLive", morph.Q.toFixed(3));
+                setText("txtRLive", sharedLiveRWave); setText("txtSLive", morph.S.toFixed(3)); setText("txtTLive", morph.T.toFixed(3));
+                setHtml("txtPAvg", `${avgP} <span style="font-size:12px;">mV</span>`); setHtml("txtQAvg", `${avgQ} <span style="font-size:12px;">mV</span>`);
+                setHtml("txtRAvg", `${sharedAvgRWave} <span style="font-size:12px;">mV</span>`); setHtml("txtSAvg", `${avgS} <span style="font-size:12px;">mV</span>`);
+                setHtml("txtTAvg", `${avgT} <span style="font-size:12px;">mV</span>`);
+            }
+
+            // 🌟 2. วัดค่า Amplitude หลัก 
+            let waveType = getVal("ampWaveType", 'SQUARE');
+            let dataSource = getVal("ampDataSource", 'RAW');
+            let targetBuffer = (dataSource === "RAW") ? valBufferAdc : valBufferFiltered;
+            let lAmpSrc = document.getElementById("lblLiveAmpSrc");
+            let bxRaw = document.getElementById("eqBoxRaw"); let bxFilt = document.getElementById("eqBoxFiltered");
+            
+            let flashOpacity = syncFlashTime > 0 ? "1" : "0.2";
+            if (syncFlashTime > 0) syncFlashTime--; 
+
+            if(dataSource === "RAW") {
+                if(lAmpSrc) { lAmpSrc.innerHTML = `● LIVE MEASUREMENT (RAW) <span style='color:#00ff44;
+                opacity:${flashOpacity}; font-weight:900; font-size:12px; margin-left:8px;'>⚡ SYNC</span>`; lAmpSrc.style.color = "#00ff44"; }
+                if(bxRaw) bxRaw.style.display = "block";
+                if(bxFilt) bxFilt.style.display = "none";
+            } else {
+                if(lAmpSrc) { lAmpSrc.innerHTML = `● LIVE MEASUREMENT (FILTERED) <span style='color:#00f3ff;
+                opacity:${flashOpacity}; font-weight:900; font-size:12px; margin-left:8px;'>⚡ SYNC</span>`; lAmpSrc.style.color = "#00f3ff"; }
+                if(bxRaw) bxRaw.style.display = "none";
+                if(bxFilt) bxFilt.style.display = "block";
+            }
+
+            if (targetBuffer.length > 50) {
+                let targetAmp = parseFloat(getVal('vTargetAmp', '1.00')) ||
+                1.0;
+                setText('eqTarAmp', targetAmp.toFixed(2)); setText('eqTarAmp2', targetAmp.toFixed(2));
+                drawSimpleChart('valCvsAmp', targetBuffer, dataSource === "RAW" ? '#00ff44' : '#00f3ff', null);
+
+                let finalValMv = 0;
+                let avgMv = 0;
+                
+                if (waveType === 'NSR') {
+                    if (dataSource === "RAW") {
+                        // 🌟 Absolute RAW NSR (Max - Median)
+                        let maxVal = Math.max(...targetBuffer);
+                        let sortedRaw = [...targetBuffer].sort((a,b)=>a-b);
+                        let medianVal = sortedRaw[Math.floor(sortedRaw.length / 2)];
+                        let rPeakAdc = maxVal - medianVal;
+                        let gainChar = getVal("gainSelect", '6'); let actualGain = (gainChar === 'm' || gainChar === 'M') ? 12 : parseInt(gainChar);
+                        let multiplier = (2420.0 / (8388607.0 * actualGain)) * customCalFactor;
+                        finalValMv = rPeakAdc * multiplier;
+                        setText("eqFilterDesc", "Absolute RAW R-Peak (Max - Median)");
+                        setText('eqAdcMax', maxVal.toFixed(0)); setText('eqAdcMin', Math.min(...targetBuffer).toFixed(0)); setText('eqAdcBase', medianVal.toFixed(0));
+                        
+                        setText('liveMeasPp', finalValMv.toFixed(3));
+                        ampHistory.push(finalValMv); if(ampHistory.length > 60) ampHistory.shift();
+                        avgMv = ampHistory.reduce((a,b) => a+b, 0) / ampHistory.length;
+                    } else {
+                        finalValMv = parseFloat(sharedLiveRWave);
+                        let maxVal = Math.max(...targetBuffer); let minVal = Math.min(...targetBuffer);
+                        let sorted = [...targetBuffer].sort((a,b) => a-b);
+                        setText("eqFilterDesc", "Fiducial R-Peak (IEC 60601-2-47)");
+                        setText('eqFiltMax', maxVal.toFixed(3)); setText('eqFiltMin', minVal.toFixed(3)); setText('eqFiltBase', sorted[Math.floor(sorted.length * 0.5)].toFixed(3));
+                        
+                        setText('liveMeasPp', sharedLiveRWave);
+                        avgMv = parseFloat(sharedAvgRWave);
+                    }
+
+                    let liveBox = document.getElementById('liveBoxAmp');
+                    if (liveBox && !document.getElementById('avgPpDisplay')) {
+                        liveBox.insertAdjacentHTML('beforeend', `<div style="margin-top:12px; border-top:1px solid #1e293b; padding-top:12px;"><span style="color:#f59e0b; font-size:11px; font-weight:800; letter-spacing:1px;">● 1-SEC AVERAGE (ใช้สอบเทียบ)</span><br><span id="avgPpDisplay" style="color:#fff; font-size:28px; font-weight:800; font-family:'JetBrains Mono';">0.000 <span style="font-size:14px;">mV</span></span></div>`);
+                    }
+                    if (document.getElementById('avgPpDisplay')) document.getElementById('avgPpDisplay').innerHTML = `${avgMv.toFixed(3)} <span style="font-size:14px;">mV</span>`;
+                    if (avgMv > 0.05 && ampHistory.length >= 10) { 
+                        let errAmp = Math.abs((avgMv - targetAmp) / targetAmp) * 100.0;
+                        setText('eqMeasAmp', avgMv.toFixed(3)); setText('resAmpErr', errAmp.toFixed(2) + " %");
+                        let boxAmp = document.getElementById('boxAmp'); let tagAmp = document.getElementById('tagAmp');
+                        let errLimitLabel = boxAmp ?
+                        boxAmp.querySelector('div[style*="font-size:11px"]') : null;
+                        if(errLimitLabel) errLimitLabel.innerText = "Error Limit: \u2264 10% (Dynamic)";
+                        if(boxAmp && tagAmp) {
+                            if (errAmp <= 10.0) { boxAmp.style.borderLeftColor = "#00ff44";
+                            tagAmp.innerHTML = "<span class='pass-tag'>PASS</span>"; } 
+                            else { boxAmp.style.borderLeftColor = "#ff2a2a";
+                            tagAmp.innerHTML = "<span class='fail-tag'>FAIL</span>"; }
+                        }
+                    }
+                } else {
+                    // 🌟 โหมด SQUARE/SINE (Absolute Peak-to-Peak ถอด Clip 100%)
+      
+                    let maxVal = Math.max(...targetBuffer);
+                    let minVal = Math.min(...targetBuffer);
+                    let ppVal = maxVal - minVal;
+                    let sorted = [...targetBuffer].sort((a,b) => a-b);
+                    let baselineVal = sorted[Math.floor(targetBuffer.length * 0.5)];
+                    
+                    setText("eqFilterDesc", "Absolute Peak-to-Peak (100% Data)");
+                    if (dataSource === "RAW") {
+                        let gainChar = getVal("gainSelect", '6');
+                        let actualGain = (gainChar === 'm' || gainChar === 'M') ? 12 : parseInt(gainChar);
+                        let multiplier = (2420.0 / (8388607.0 * actualGain)) * customCalFactor;
+                        finalValMv = ppVal * multiplier;
+                        setText('eqAdcMax', maxVal.toFixed(0)); setText('eqAdcMin', minVal.toFixed(0));
+                        setText('eqAdcBase', baselineVal.toFixed(0));
+                    } else {
+                        finalValMv = ppVal;
+                        setText('eqFiltMax', maxVal.toFixed(3)); setText('eqFiltMin', minVal.toFixed(3)); setText('eqFiltBase', baselineVal.toFixed(3));
+                    }
+                    
+                    setText('liveMeasPp', finalValMv.toFixed(3));
+                    ampHistory.push(finalValMv); if(ampHistory.length > 60) ampHistory.shift();
+                    avgMv = ampHistory.reduce((a,b) => a+b, 0) / ampHistory.length;
+
+                    let liveBox = document.getElementById('liveBoxAmp');
+                    if (liveBox && !document.getElementById('avgPpDisplay')) {
+                        liveBox.insertAdjacentHTML('beforeend', `<div style="margin-top:12px; border-top:1px solid #1e293b; padding-top:12px;"><span style="color:#f59e0b; font-size:11px; font-weight:800; letter-spacing:1px;">● 1-SEC AVERAGE (ใช้สอบเทียบ)</span><br><span id="avgPpDisplay" style="color:#fff; font-size:28px; font-weight:800; font-family:'JetBrains Mono';">0.000 <span style="font-size:14px;">mV</span></span></div>`);
+                    }
+                    if (document.getElementById('avgPpDisplay')) document.getElementById('avgPpDisplay').innerHTML = `${avgMv.toFixed(3)} <span style="font-size:14px;">mV</span>`;
+                    if (avgMv > 0.05 && ampHistory.length >= 10) { 
+                        let errAmp = Math.abs((avgMv - targetAmp) / targetAmp) * 100.0;
+                        setText('eqMeasAmp', avgMv.toFixed(3)); setText('resAmpErr', errAmp.toFixed(2) + " %");
+                        let boxAmp = document.getElementById('boxAmp'); let tagAmp = document.getElementById('tagAmp');
+                        let errLimitLabel = boxAmp ?
+                        boxAmp.querySelector('div[style*="font-size:11px"]') : null;
+                        if(errLimitLabel) errLimitLabel.innerText = "Error Limit: \u2264 5% (Static)";
+                        if(boxAmp && tagAmp) {
+                            if (errAmp <= 5.0) { boxAmp.style.borderLeftColor = "#00ff44";
+                            tagAmp.innerHTML = "<span class='pass-tag'>PASS</span>"; } 
+                            else { boxAmp.style.borderLeftColor = "#ff2a2a";
+                            tagAmp.innerHTML = "<span class='fail-tag'>FAIL</span>"; }
+                        }
+                    }
+                }
+            }
+
+            // 🌟 3. อัปเดต HEART RATE & TIME BASE
+            let bpmModeEl = document.getElementById("bpmTestMode");
+            let mode = bpmModeEl ? bpmModeEl.value : "NSR";
+            let bpmSrcEl = document.getElementById("bpmDataSource");
+            let dataSourceBpm = bpmSrcEl ? bpmSrcEl.value : "FILTERED";
+            
+            // วาดกราฟให้ตรง Source
+            let targetBufferBpm = (dataSourceBpm === "RAW") ? valBufferAdc : valBufferFiltered;
+            let graphColorBpm = (dataSourceBpm === "RAW") ? '#00f3ff' : '#e879f9';
+            drawSimpleChart('valCvsBpm', targetBufferBpm, graphColorBpm, null);
+
+            let targetVal = parseFloat(getVal('vTargetBpm', '60')) || 1.0;
+
+            if (mode === "NSR") {
+                let liveBpm = bpm;
+                setText('eqTarBpm', targetVal); setText('eqTarBpm2', targetVal);
+                if (liveBpm > 0) {
+                    let errBpm = Math.abs((liveBpm - targetVal) / targetVal) * 100.0;
+                    setHtml('liveMeasBpm', liveBpm.toFixed(2) + " <span style='font-size:16px; font-weight:400;' id='unitBpmMode'>BPM</span>");
+                    setText('eqMeasBpm', liveBpm.toFixed(2)); setText('resBpmErr', errBpm.toFixed(2) + " %");
+                    
+                    let boxBpm = document.getElementById('boxBpm'); let tagBpm = document.getElementById('tagBpm');
+                    if(boxBpm && tagBpm) {
+                        let limitBpm = Math.max(1, targetVal * 0.01);
+                        if (Math.abs(liveBpm - targetVal) <= limitBpm) { boxBpm.style.borderLeftColor = "#00ff44"; tagBpm.innerHTML = "<span class='pass-tag'>PASS</span>"; } 
+                        else { boxBpm.style.borderLeftColor = "#ff2a2a"; tagBpm.innerHTML = "<span class='fail-tag'>FAIL</span>"; }
+                    }
+                } else {
+                    setText('resBpmErr', "-- %");
+                    let tagBpm = document.getElementById('tagBpm'); if(tagBpm) tagBpm.innerHTML = "<span style='color:#6b7280; font-weight:800; font-size:18px;'>WAITING</span>";
+                    let boxBpm = document.getElementById('boxBpm'); if(boxBpm) boxBpm.style.borderLeftColor = "#374151";
+                }
+            } else {
+                let targetHz = targetVal <= 0 ? 1 : targetVal; 
+                let idealSamples = currentSps / targetHz; 
+                let measSamples = measuredSqSamples; // 🌟 ดึง Sample ตรงๆ จากสมอง SQ Wave
+                
+                setText('eqTxtSps', currentSps);
+                setText('eqTxtHz', targetHz);
+                setText('eqEqTarIdeal', idealSamples.toFixed(0));
+                
+                if (measSamples > 0) {
+                    setHtml('liveMeasBpm', measSamples + " <span style='font-size:16px; font-weight:400;' id='unitBpmMode'>Samples</span>");
+                    setText('eqEqMeas', measSamples);
+                    setText('eqEqTar', idealSamples.toFixed(0));
+                    setText('eqEqTar2', idealSamples.toFixed(0));
+                    
+                    let errPercent = (Math.abs(measSamples - idealSamples) / idealSamples) * 100.0;
+                    setText('resBpmErr', errPercent.toFixed(2) + " %");
+                    
+                    let boxBpm = document.getElementById('boxBpm'); let tagBpm = document.getElementById('tagBpm');
+                    if(boxBpm && tagBpm) {
+                        if (errPercent <= 1.0) { boxBpm.style.borderLeftColor = "#00ff44"; tagBpm.innerHTML = "<span class='pass-tag'>PASS</span>"; } 
+                        else { boxBpm.style.borderLeftColor = "#ff2a2a"; tagBpm.innerHTML = "<span class='fail-tag'>FAIL</span>"; }
+                    }
+                } else {
+                    setText('resBpmErr', "-- %");
+                    let tagBpm = document.getElementById('tagBpm'); if(tagBpm) tagBpm.innerHTML = "<span style='color:#6b7280; font-weight:800; font-size:18px;'>WAITING</span>";
+                    let boxBpm = document.getElementById('boxBpm'); if(boxBpm) boxBpm.style.borderLeftColor = "#374151";
+                }
+            }
+
+            drawSimpleChart('valCvsNoise', valBufferAdc, '#00f3ff', 50000);
+            let noiseUv = noiseMv * 1000.0; 
+            setHtml('liveMeasNoise', noiseUv.toFixed(1) + " <span style='font-size:16px; font-weight:400;'>μV</span>");
+            let boxNoise = document.getElementById('boxNoise');
+            let tagNoise = document.getElementById('tagNoise');
+            if(boxNoise && tagNoise) {
+                if (noiseUv >= 0 && noiseUv < 150.0) { 
+                    if (noiseUv <= 50.0) { boxNoise.style.borderLeftColor = "#00ff44";
+                    tagNoise.innerHTML = "<span class='pass-tag'>PASS</span>"; } 
+                    else { boxNoise.style.borderLeftColor = "#ff2a2a";
+                    tagNoise.innerHTML = "<span class='fail-tag'>FAIL</span>"; }
+                } else {
+                    boxNoise.style.borderLeftColor = "#374151";
+                    tagNoise.innerHTML = "<span style='color:#6b7280; font-weight:800; font-size:18px;'>WAITING</span>";
+                }
+            }
+        }
+
+        // ==========================================
+        // 📡 9. BLE COMMUNICATIONS & MAIN LOOP
+        // ==========================================
+        async function sendCmd(text){
+            if (!bleRxChar || !connected) return;
+            try { await bleRxChar.writeValueWithoutResponse(new TextEncoder().encode(text)); } catch (e) {}
+        }
+
+        async function toggleConnection(){
+            if (!navigator.bluetooth) { alert("⚠️ เบราว์เซอร์ไม่รองรับ Bluetooth");
+            return; }
+            if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) { bleDevice.gatt.disconnect();
+            return; }
+            try {
+                let btn = document.getElementById('connectBtn') ||
+                document.getElementById('bleConnectBtn');
+                let stat = document.getElementById('bleStatus');
+                if(stat) stat.innerText = 'Status: Connecting...'; 
+                if(btn) btn.innerText = 'CONNECTING...';
+                bleDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] });
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                const server = await bleDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                bleTxChar = await service.getCharacteristic(CHAR_TX_UUID);
+                bleRxChar = await service.getCharacteristic(CHAR_RX_UUID);
+                
+                // 🌟 ระบบป้องกันพัง: ลองเชื่อมต่อกับช่องเวลา (ถ้าไม่เจอก็ไม่เป็นไร กราฟยังรันต่อได้)
+                try {
+                    bleTimeChar = await service.getCharacteristic(CHAR_TIME_UUID);
+                    await bleTimeChar.startNotifications();
+                    bleTimeChar.addEventListener('characteristicvaluechanged', onTimeNotification);
+                    let currentEpoch = Math.floor(Date.now() / 1000);
+                    await bleTimeChar.writeValueWithoutResponse(new TextEncoder().encode("T" + currentEpoch));
+                    // 🌟 [เพิ่มตรงนี้] จำเวลา มิลลิวินาที ของเบราว์เซอร์ไว้
+                    window.syncJsTimeMs = Date.now(); 
+                    window.syncBaseEpoch = currentEpoch;
+                } catch(e) {
+                    console.warn("Time Char not found (GATT Cache issue). Proceeding with ECG only.");
+                }
+
+                await bleTxChar.startNotifications();
+                bleTxChar.addEventListener('characteristicvaluechanged', onNotification);
+                connected = true;
+                connStartTime = Date.now(); // 🌟 เริ่มจับเวลาเชื่อมต่อ
+                let elTarget = document.getElementById("hexAll") || document.getElementById("bleTarget") || document.getElementById("infoBle");
+                if(elTarget) elTarget.innerText = bleDevice.name || 'XIAO_HOLTER';
+                
+                if(btn) { btn.innerText = 'DISCONNECT';
+                btn.style.backgroundColor = '#ff2a2a'; }
+                if(stat) { stat.innerText = 'Status: Connected (BLE High-Speed)';
+                stat.style.color = '#00ff44'; }
+                
+                let gSel = document.getElementById("gainSelect");
+                if(gSel) gSel.disabled = false;
+                let sSel = document.getElementById("spsSelect"); if(sSel) sSel.disabled = false;
+                
+                resetAllData(); changeClinicalSettings(); updateMaxValues(); 
+            } catch (err) {
+                connected = false;
+                let stat = document.getElementById('bleStatus'); if(stat) { stat.innerText = 'Status: Failed'; stat.style.color = '#ff2a2a';
+                }
+                let btn = document.getElementById('connectBtn') ||
+                document.getElementById('bleConnectBtn'); if(btn) { btn.innerText = 'CONNECT BLE'; btn.style.backgroundColor = '#00f3ff';
+                }
+            }
+        }
+        window.toggleBLE = toggleConnection;
+        function onDisconnected(){
+            connected = false; 
+            connStartTime = null; // 🌟 หยุดเวลานับการเชื่อมต่อ
+            let stat = document.getElementById('bleStatus');
+            if(stat) { stat.innerText = 'Status: Disconnected'; stat.style.color = '#6b7280'; }
+            let elTarget = document.getElementById("hexAll") ||
+            document.getElementById("bleTarget") || document.getElementById("infoBle");
+            if(elTarget) elTarget.innerText = 'Waiting...';
+            
+            let btn = document.getElementById('connectBtn') || document.getElementById('bleConnectBtn'); if(btn) { btn.innerText = 'CONNECT BLE';
+            btn.style.backgroundColor = '#00f3ff'; }
+            let gSel = document.getElementById("gainSelect");
+            if(gSel) gSel.disabled = true;
+            let sSel = document.getElementById("spsSelect"); if(sSel) sSel.disabled = true;
+            setText("mcuTimeDisplay", "--:--:--"); // เคลียร์หน้าปัดเวลา MCU
+        }
+
+        function onNotification(event){
+            try {
+                const dv = event.target.value;
+                // เปลี่ยนการคำนวณจำนวนชุดข้อมูล (6 Bytes = CH1 3 Bytes + CH2 3 Bytes)
+                const packetSetCount = Math.floor(dv.byteLength / 6); 
+                packetCounter++;
+                
+                setText('engTotalSets', packetCounter);
+                setText('engTotalRaw', packetCounter * packetSetCount); 
+                let lossEl = document.getElementById("hexLoss") || document.getElementById("pktCount") || document.getElementById("infoPkt");
+                if (lossEl) lossEl.innerText = packetCounter;
+                
+                // 🌟 อ่านข้อมูลแบบ 24-Bit (ประกอบร่าง 3 Bytes กลับเป็นตัวเลข)
+                for (let i = 0; i < dv.byteLength; i += 6) { 
+                    // ดึง 3 Bytes ของ CH1 (RESP) - อ่านแบบ MSB First
+                    let ch1 = (dv.getUint8(i) << 16) | (dv.getUint8(i+1) << 8) | dv.getUint8(i+2);
+                    if (ch1 & 0x800000) ch1 |= 0xFF000000; // Sign Extend (แปลงค่าติดลบให้ถูกต้อง)
+                    
+                    // ดึง 3 Bytes ของ CH2 (ECG) - อ่านแบบ MSB First
+                    let ch2 = (dv.getUint8(i+3) << 16) | (dv.getUint8(i+4) << 8) | dv.getUint8(i+5);
+                    if (ch2 & 0x800000) ch2 |= 0xFF000000; // Sign Extend
+                    
+                    rxQueueCh1.push(ch1);
+                    rxQueueCh2.push(ch2);
+                }
+            } catch (e) { }
+        }
+
+        // ==========================================
+        // ⏱️ 10. TIME SYNC LOGIC
+        // ==========================================
+        setInterval(() => {
+            let d = new Date();
+            let timeStr = d.getHours().toString().padStart(2,'0') + ":" + 
+                          d.getMinutes().toString().padStart(2,'0') + ":" + 
+                          d.getSeconds().toString().padStart(2,'0');
+            setText("webTimeDisplay", timeStr);
+
+            // 🌟 อัปเดตตัวเลขในหน้า Dashboard
+            if (connected && connStartTime) {
+                let now = Date.now();
+                let elapsedSecs = Math.floor((now - connStartTime) / 1000);
+                let m = Math.floor(elapsedSecs / 60).toString().padStart(2, '0');
+                let s = (elapsedSecs % 60).toString().padStart(2, '0');
+                setText('engConnTime', `${m}:${s}`);
+
+                // คำนวณ Rate Set/s ทุกๆ 1 วินาที
+                if (now - lastRateCalcTime >= 1000) {
+                    let rate = packetCounter - lastBatchCount;
+                    lastBatchCount = packetCounter;
+                    lastRateCalcTime = now;
+                    setHtml('engBatchRate', `${rate} <span style="font-size:14px; color:#94a3b8;">Set/s</span>`);
+                }
+            }
+        }, 50);
+
+        function onTimeNotification(event) {
+            let decoder = new TextDecoder('utf-8');  
+            // 🌟 พระเอกอยู่ตรงนี้! ใส่ .trim() เพื่อตัดช่องว่าง/ขยะที่ตามมากับ BLE ทิ้งให้หมด!
+            let msg = decoder.decode(event.target.value).trim(); 
+            
+            // 🌟 รับข้อความเกี่ยวกับ File Manager
+            if (msg.startsWith("F:")) {
+                let fileDisplay = document.getElementById("fileListDisplay");
+                if (msg === "F:START") {
+                    fileDisplay.innerHTML = "<div style='color:#00f3ff; margin-bottom:5px;'>[ ✅ SD CARD CONNECTED ]</div>";
+                } 
+                else if (msg === "F:END") {
+                    fileDisplay.innerHTML += "<div style='color:#00ff44; margin-top:5px;'>-- End of List --</div>";
+                } 
+                // 🌟 รับ Error ตอนบอร์ดตอบกลับมาว่าไม่มีการ์ด
+                else if (msg === "F:ERR") {
+                    fileDisplay.innerHTML = "<div style='color:#ef4444; font-weight:bold; font-size:14px;'>❌ ไม่พบ SD CARD!</div><div style='color:#94a3b8; margin-top:5px;'>เสียบการ์ดให้แน่น แล้วกดปุ่ม 🔌 CHECK SD เพื่อบังคับ Mount ใหม่</div>";
+                }
+                else {
+                    fileDisplay.innerHTML += "<div>📄 " + msg.substring(2) + "</div>";
+                }
+                return; 
+            }
+
+            // ... (โค้ด Time Sync เวลาเดิมด้านล่าง ปล่อยไว้เหมือนเดิมครับ) ...
+
+            // 🌟 2. ถ้ารับเวลา Time Sync ปกติ
+            let parts = msg.split('.');
+            let mcuEpoch = parseInt(parts[0]);
+            let mcuMs = parts.length > 1 ? parseInt(parts[1]) : 0;
+            if(!isNaN(mcuEpoch)) {
+                let d = new Date(mcuEpoch * 1000);
+                let timeStr = d.getHours().toString().padStart(2,'0') + ":" + 
+                            d.getMinutes().toString().padStart(2,'0') + ":" + 
+                            d.getSeconds().toString().padStart(2,'0');
+                setText("mcuTimeDisplay", timeStr);
+
+                let currentJsMs = Date.now();
+                let elapsedJsMs = currentJsMs - window.syncJsTimeMs;
+                let elapsedMcuMs = ((mcuEpoch - window.syncBaseEpoch) * 1000) + mcuMs;
+                let driftMs = elapsedJsMs - elapsedMcuMs; 
+
+                let driftEl = document.getElementById("timeDriftDisplay");
+                if(driftEl) {
+                    if (Math.abs(driftMs) <= 50) { 
+                        driftEl.innerText = "Sync: Perfect (" + driftMs + " ms)";
+                        driftEl.style.color = "#00ff44";
+                    } else {
+                        let sign = driftMs > 0 ? "+" : "";
+                        driftEl.innerText = "Drift: " + sign + driftMs + " ms";
+                        driftEl.style.color = "#ff2a2a";
+                    }
+                }
+            }
+        }
+
+        function animationLoop() { 
+            let items = Math.ceil(rxQueueCh2.length / 5);
+            if(items > 25) items = 25; 
+            
+            let filterModeEl = document.getElementById("clinFilter");
+            let filterMode = filterModeEl ? filterModeEl.value : "BESSEL";
+            let advDspEl = document.getElementById("advDspSelect");
+            let dspMode = advDspEl ? advDspEl.value : "NONE";
+            if (advBaselineCh1.mode !== dspMode) { 
+                advBaselineCh1.setMode(dspMode, currentSps); 
+                advBaselineCh2.setMode(dspMode, currentSps); 
+            }
+
+            for(let i=0; i<items; i++){
+                if(rxQueueCh2.length === 0 || rxQueueCh1.length === 0) break;
+                
+                let adc_ch1 = rxQueueCh1.shift();
+                let adc_ch2 = rxQueueCh2.shift();
+                
+                // ==============================
+                // 🫁 ประมวลผล CH1 (RESP)
+                // ==============================
+                chart1_ch1.queueData(adc_ch1);
+                let v_raw_ch1 = adcToMv(adc_ch1);
+                chart2_ch1.queueData(v_raw_ch1);
+                
+                // 🌟🌟🌟 ใช้ Cascade Filter ตัวใหม่ที่ลบคลื่นหัวใจออก 100% 🌟🌟🌟
+                let v_clin_ch1 = respDSP.process(v_raw_ch1); 
+                // (ถ้ากราฟการหายใจเข้า-ออกมันกลับหัว ลูกพี่สามารถเติมเครื่องหมายลบด้านหน้าเป็น: -respDSP.process(v_raw_ch1) ได้ครับ)
+                
+                chart3_ch1.queueData(v_clin_ch1);
+
+                // ==============================
+                // 🫀 ประมวลผล CH2 (ECG)
+                // ==============================
+                chart1_ch2.queueData(adc_ch2);
+                let v_raw_ch2 = adcToMv(adc_ch2);
+                chart2_ch2.queueData(v_raw_ch2);
+
+                let dcBlocked = hpf_0_5.process(adc_ch2);
+                let noHum = notch_50.process(dcBlocked);
+                
+                let filtAdc = adc_ch2;
+                if(filterMode.includes("DIAG")) filtAdc = lpf_150.process(noHum);
+                else if (filterMode.includes("EMG")) filtAdc = lpf_25.process(noHum);
+                else filtAdc = lpf_40.process(noHum); 
+                
+                let v_clin_ch2 = adcToMv(filtAdc);
+                v_clin_ch2 = advBaselineCh2.process(v_clin_ch2); 
+                chart3_ch2.queueData(v_clin_ch2);
+                clinChart.queueData(v_clin_ch2);
+
+                chart4.queueData(bpm > 0 ? bpm : 60);
+
+                // 🌟 ป้อนข้อมูล CH2 กลับเข้า Array หลัก เพื่อให้หน้าจอ Validation ทำงานต่อได้!
+                valBufferAdc.push(adc_ch2); valBufferAdc.shift();
+                valBufferFiltered.push(v_clin_ch2); valBufferFiltered.shift();
+
+                let rawCenteredMv = adcToMv(dcBlocked);
+                globalSampleIndex++;
+                let absoluteTimeMs = globalSampleIndex * (1000.0 / currentSps);
+                detectHeartRate(v_clin_ch2, absoluteTimeMs);
+
+                // อัปเดตตัวเลขหน้าจอ
+                if (globalSampleIndex % 25 === 0) { 
+                    setText("val1_ch1", adc_ch1);
+                    setText("val1_ch2", adc_ch2);
+                    setText("val2_ch1", v_raw_ch1.toFixed(4) + " mV");
+                    setText("val2_ch2", v_raw_ch2.toFixed(4) + " mV");
+                    setText("val3_ch1", v_clin_ch1.toFixed(4) + " mV");
+                    setText("val3_ch2", v_clin_ch2.toFixed(4) + " mV");
+                    setText("val4", Math.round(bpm > 0 ? bpm : 60) + " BPM");
+                }
+                
+                // 📊 คำนวณ SQI
+                if (globalSampleIndex % currentSps === 0 && valBufferAdc.length >= 500) {
+                    let cRms = calculateRMSNoise(valBufferAdc);
+                    let cSnr = calculateSNR(valBufferFiltered, valBufferAdc);
+                    let cKurt = calculateKurtosis(valBufferFiltered); 
+                    let cSpec = calculateSpectralPowerRatio(valBufferFiltered, valBufferAdc);
+
+                    setText("txtRmsDisplay", cRms.toFixed(1));
+                    setText("txtSnrDisplay", cSnr.toFixed(1) + " dB");
+                    setText("txtKurtosisDisplay", cKurt.toFixed(2)); 
+                    setText("txtSpecRatioDisplay", cSpec.toFixed(1) + " %");
+
+                    sqiHistory.rms.push(cRms); if(sqiHistory.rms.length > MAX_TREND_SEC) sqiHistory.rms.shift();
+                    sqiHistory.snr.push(cSnr); if(sqiHistory.snr.length > MAX_TREND_SEC) sqiHistory.snr.shift();
+                    sqiHistory.kurt.push(cKurt); if(sqiHistory.kurt.length > MAX_TREND_SEC) sqiHistory.kurt.shift();
+                    sqiHistory.spec.push(cSpec); if(sqiHistory.spec.length > MAX_TREND_SEC) sqiHistory.spec.shift();
+
+                    let metroView = document.getElementById('viewMetro');
+                    if (metroView && metroView.style.display !== 'none') {
+                        drawTrendGraph('cvsRms', sqiHistory.rms, '#8b5cf6');
+                        drawTrendGraph('cvsSnr', sqiHistory.snr, '#3b82f6');
+                        drawTrendGraph('cvsKurt', sqiHistory.kurt, '#10b981'); 
+                        drawTrendGraph('cvsSpec', sqiHistory.spec, '#f43f5e');
+                    }
+                }
+            }
+
+            if(chart1_ch1) {
+                chart1_ch1.renderFrame(); chart1_ch2.renderFrame();
+                chart2_ch1.renderFrame(); chart2_ch2.renderFrame();
+                chart3_ch1.renderFrame(); chart3_ch2.renderFrame();
+                chart4.renderFrame(); clinChart.renderFrame();
+            }
+            updateLiveValidation();
+            requestAnimationFrame(animationLoop); 
+        }
+
+        window.onload = function() { 
+            let pSel = document.getElementById("portSelect");
+            if (pSel) { pSel.innerHTML = '<option value="BLE">Bluetooth LE</option>'; pSel.disabled = true;
+            }
+            
+            let metroHead = document.querySelector('.metro-header');
+            if (metroHead && !document.getElementById("calFactorInput")) {
+                metroHead.insertAdjacentHTML('beforeend', `<div style="margin-top:15px; display:inline-block; background:#050505; border:1px solid #00f3ff; padding:8px 15px; border-radius:8px;"><label style="color:#00f3ff; font-weight:800; font-size:12px; letter-spacing:1px; margin-right:10px;">⚙️ CALIBRATION FACTOR (NIMT):</label><input type="number" id="calFactorInput" value="1.000" step="0.001" style="background:#111827; color:#fff; border:1px solid #374151; padding:4px 8px; border-radius:4px; font-family:'JetBrains Mono'; font-size:14px; font-weight:bold; width:80px; text-align:center;" onchange="updateCalFactor()"></div>`);
+            }
+
+            let metroView = document.getElementById('viewMetro');
+            if (metroView && !document.getElementById('sqiDashboard')) {
+                metroView.insertAdjacentHTML('beforeend', `<div id="sqiDashboard" style="margin-top:25px; padding:20px; background:#0f172a; border:1px solid #38bdf8; border-radius:12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);"><h3 style="color:#38bdf8; margin:0 0 15px 0; font-weight:900; font-size:16px; letter-spacing:1px;">📊 SIGNAL QUALITY INDICES (SQI) - 60 SEC TRENDS</h3><div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px;"><div style="background:#050505; padding:15px; border-radius:8px; border-left:4px solid #8b5cf6; display:flex; flex-direction:column;"><span style="color:#94a3b8; font-size:11px; font-weight:bold;">RMS NOISE (ขยะสวิตชิ่ง)</span><div><b id="txtRmsDisplay" style="color:#fff; font-size:24px; font-family:'JetBrains Mono';">--</b> <span style="color:#64748b; font-size:14px;">ADC</span></div><canvas id="cvsRms" style="width:100%; height:60px; margin-top:10px;"></canvas></div><div style="background:#050505;
+                padding:15px; border-radius:8px; border-left:4px solid #3b82f6; display:flex; flex-direction:column;"><span style="color:#94a3b8; font-size:11px; font-weight:bold;">SIGNAL-TO-NOISE RATIO (SNR)</span><div><b id="txtSnrDisplay" style="color:#fff; font-size:24px; font-family:'JetBrains Mono';">--</b> <span style="color:#64748b;
+                font-size:14px;">dB</span></div><canvas id="cvsSnr" style="width:100%; height:60px; margin-top:10px;"></canvas></div><div style="background:#050505; padding:15px; border-radius:8px; border-left:4px solid #10b981; display:flex; flex-direction:column;"><span style="color:#94a3b8; font-size:11px; font-weight:bold;">KURTOSIS (ความแหลม R-Peak)</span><div><b id="txtKurtosisDisplay" style="color:#fff;
+                font-size:24px; font-family:'JetBrains Mono';">--</b></div><canvas id="cvsKurt" style="width:100%; height:60px; margin-top:10px;"></canvas></div><div style="background:#050505; padding:15px; border-radius:8px; border-left:4px solid #f43f5e; display:flex; flex-direction:column;"><span style="color:#94a3b8; font-size:11px;
+                font-weight:bold;">HF POWER RATIO (ขยะความถี่สูง)</span><div><b id="txtSpecRatioDisplay" style="color:#fff; font-size:24px; font-family:'JetBrains Mono';">--</b> <span style="color:#64748b; font-size:14px;">%</span></div><canvas id="cvsSpec" style="width:100%; height:60px;
+                margin-top:10px;"></canvas></div></div></div>`);
+            }
+
+            if (metroView && !document.getElementById('morphDashboard')) {
+                metroView.insertAdjacentHTML('beforeend', `
+                    <div id="morphDashboard" style="margin-top:25px; padding:20px; background:#0f172a; border:1px solid #10b981; border-radius:12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                      
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="color:#10b981; margin:0; font-weight:900; font-size:16px; letter-spacing:1px;">🧬 ECG MORPHOLOGY (AMPLITUDE ACCURACY STYLE)</h3>
+                            <span style="color:#64748b; font-size:12px; font-weight:bold;">*R-Peak Synced with Main Accuracy Box</span>
+                    
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:15px;">
+                            <div style="background:#050505;
+                            border:1px solid #3b82f6; border-radius:8px; padding:15px; text-align:center;">
+                                <div style="color:#3b82f6;
+                                font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:10px;">● P-WAVE</div>
+                                <div style="font-size:11px;
+                                color:#94a3b8; font-weight:bold;">LIVE MEASUREMENT</div>
+                                <div id="txtPLive" style="color:#fff;
+                                font-size:18px; font-weight:bold; font-family:'JetBrains Mono';">0.000</div>
+                                <div style="margin:12px 0;
+                                border-top:1px dashed #1e293b;"></div>
+                                <div style="font-size:11px;
+                                color:#f59e0b; font-weight:bold;">1-SEC AVERAGE</div>
+                                <div id="txtPAvg" style="color:#3b82f6;
+                                font-size:26px; font-weight:900; font-family:'JetBrains Mono';">0.000 <span style="font-size:12px;">mV</span></div>
+                            </div>
+                            <div style="background:#050505;
+                            border:1px solid #f59e0b; border-radius:8px; padding:15px; text-align:center;">
+                                <div style="color:#f59e0b;
+                                font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:10px;">● Q-WAVE</div>
+                                <div style="font-size:11px;
+                                color:#94a3b8; font-weight:bold;">LIVE MEASUREMENT</div>
+                                <div id="txtQLive" style="color:#fff;
+                                font-size:18px; font-weight:bold; font-family:'JetBrains Mono';">0.000</div>
+                                <div style="margin:12px 0;
+                                border-top:1px dashed #1e293b;"></div>
+                                <div style="font-size:11px;
+                                color:#f59e0b; font-weight:bold;">1-SEC AVERAGE</div>
+                                <div id="txtQAvg" style="color:#f59e0b;
+                                font-size:26px; font-weight:900; font-family:'JetBrains Mono';">0.000 <span style="font-size:12px;">mV</span></div>
+                            </div>
+                            <div style="background:#050505;
+                            border:2px solid #ef4444; border-radius:8px; padding:15px; text-align:center; box-shadow:0 0 10px rgba(239, 68, 68, 0.2);">
+                                <div style="color:#ef4444;
+                                font-size:14px; font-weight:900; letter-spacing:1px; margin-bottom:10px;">● R-PEAK</div>
+                                <div style="font-size:11px;
+                                color:#94a3b8; font-weight:bold;">LIVE MEASUREMENT</div>
+                                <div id="txtRLive" style="color:#fff;
+                                font-size:20px; font-weight:bold; font-family:'JetBrains Mono';">0.000</div>
+                                <div style="margin:12px 0;
+                                border-top:1px dashed #1e293b;"></div>
+                                <div style="font-size:11px;
+                                color:#f59e0b; font-weight:bold;">1-SEC AVERAGE</div>
+                                <div id="txtRAvg" style="color:#ef4444;
+                                font-size:32px; font-weight:900; font-family:'JetBrains Mono';">0.000 <span style="font-size:12px;">mV</span></div>
+                            </div>
+                            <div style="background:#050505;
+                            border:1px solid #10b981; border-radius:8px; padding:15px; text-align:center;">
+                                <div style="color:#10b981;
+                                font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:10px;">● S-WAVE</div>
+                                <div style="font-size:11px;
+                                color:#94a3b8; font-weight:bold;">LIVE MEASUREMENT</div>
+                                <div id="txtSLive" style="color:#fff;
+                                font-size:18px; font-weight:bold; font-family:'JetBrains Mono';">0.000</div>
+                                <div style="margin:12px 0;
+                                border-top:1px dashed #1e293b;"></div>
+                                <div style="font-size:11px;
+                                color:#f59e0b; font-weight:bold;">1-SEC AVERAGE</div>
+                                <div id="txtSAvg" style="color:#10b981;
+                                font-size:26px; font-weight:900; font-family:'JetBrains Mono';">0.000 <span style="font-size:12px;">mV</span></div>
+                            </div>
+                            <div style="background:#050505;
+                            border:1px solid #8b5cf6; border-radius:8px; padding:15px; text-align:center;">
+                                <div style="color:#8b5cf6;
+                                font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:10px;">● T-WAVE</div>
+                                <div style="font-size:11px;
+                                color:#94a3b8; font-weight:bold;">LIVE MEASUREMENT</div>
+                                <div id="txtTLive" style="color:#fff;
+                                font-size:18px; font-weight:bold; font-family:'JetBrains Mono';">0.000</div>
+                                <div style="margin:12px 0;
+                                border-top:1px dashed #1e293b;"></div>
+                                <div style="font-size:11px;
+                                color:#f59e0b; font-weight:bold;">1-SEC AVERAGE</div>
+                                <div id="txtTAvg" style="color:#8b5cf6;
+                                font-size:26px; font-weight:900; font-family:'JetBrains Mono';">0.000 <span style="font-size:12px;">mV</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+             }
+
+            let clinFilterEl = document.getElementById('clinFilter');
+            if (clinFilterEl && !document.getElementById('advDspSelect')) {
+                let newSelect = document.createElement('select');
+                newSelect.id = 'advDspSelect';
+                newSelect.style.cssText = "background:#1e293b; color:#fff; border:1px solid #374151; padding:6px 12px; border-radius:6px; font-family:inherit; margin-left:10px; font-size:13px; font-weight:bold; cursor:pointer;";
+                newSelect.innerHTML = `
+                    <option value="NONE">Advanced DSP: OFF</option>
+                    <option value="MA">DSP: Moving Average (MA)</option>
+                    <option value="POLY">DSP: Polynomial Fit (2nd Order)</option>
+                    <option value="WAVELET">DSP: Wavelet (Cubic Spline)</option>
+                    <option value="SMART_FLAT" selected>🌟 DSP: Smart Flatline (Iso-Tracker)</option>
+                `;
+                clinFilterEl.parentNode.insertBefore(newSelect, clinFilterEl.nextSibling);
+            }
+
+            updateMaxValues(); setTimeout(() => 
+            { switchMode('eng'); }, 100); requestAnimationFrame(animationLoop); 
+        };
+        
+        // 🌟 ฟังก์ชันจัดการการเปลี่ยนโหมดและ Source ของ UI
+        function updateBpmModeUI() {
+            let mode = document.getElementById("bpmTestMode").value;
+            let source = document.getElementById("bpmDataSource").value;
+            
+            setText("eqSrcNsr", source === "RAW" ? "RAW ADC" : "Filtered Data");
+            setText("eqSrcTime", source === "RAW" ? "RAW ADC" : "Filtered Data");
+
+            let inputTarget = document.getElementById("vTargetBpm");
+            if (mode === "NSR") {
+                document.getElementById("eqBoxNsr").style.display = "block";
+                document.getElementById("eqBoxTime").style.display = "none";
+                document.getElementById("lblTargetBpm").innerText = "Target (BPM):";
+                if(inputTarget && inputTarget.value === "1") inputTarget.value = "60";
+                document.getElementById("lblLimitBpm").innerText = "Error Limit: ≤ 1 bpm or 1%";
+                document.getElementById("liveBoxBpm").style.borderColor = "#c026d3";
+                document.getElementById("lblLiveBpmMode").innerText = "● LIVE HEART RATE";
+                document.getElementById("lblLiveBpmMode").style.color = "#e879f9";
+            } else {
+                document.getElementById("eqBoxNsr").style.display = "none";
+                document.getElementById("eqBoxTime").style.display = "block";
+                document.getElementById("lblTargetBpm").innerText = "Target Frequency (Hz):";
+                if(inputTarget && inputTarget.value === "60") inputTarget.value = "1";
+                document.getElementById("lblLimitBpm").innerText = "Error Limit: ≤ 1%";
+                document.getElementById("liveBoxBpm").style.borderColor = "#00f3ff";
+                document.getElementById("lblLiveBpmMode").innerText = "● LIVE SAMPLES / CYCLE";
+                document.getElementById("lblLiveBpmMode").style.color = "#00f3ff";
+                setText("eqTxtSps", currentSps);
+            }
+            
+            // รีเซ็ตเพื่อรอสัญญาณใหม่
+            bpm = 0; measuredSqSamples = 0; sqPhase = 0; sqCounter = 0;
+            setHtml("liveMeasBpm", `-- <span style="font-size:16px; font-weight:400;" id="unitBpmMode">${mode === 'NSR' ? 'BPM' : 'Samples'}</span>`);
+            setText("resBpmErr", "-- %");
+            let tag = document.getElementById("tagBpm"); if(tag) { tag.innerText = "WAITING"; tag.style.color = "#475569"; tag.className = ""; }
+            let box = document.getElementById("boxBpm"); if(box) box.style.borderLeftColor = "#374151";
+        }
+
+        window.addEventListener('resize', () => {
+            chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); clinChart.resize();
+            let csAmp = document.getElementById('valCvsAmp'); if(csAmp) { csAmp.width = csAmp.offsetWidth; csAmp.height = csAmp.offsetHeight;
+            }
+            let csBpm = document.getElementById('valCvsBpm');
+            if(csBpm) { csBpm.width = csBpm.offsetWidth; csBpm.height = csBpm.offsetHeight; }
+            let csNoise = document.getElementById('valCvsNoise');
+            if(csNoise) { csNoise.width = csNoise.offsetWidth; csNoise.height = csNoise.offsetHeight; }
+            let cvsIds = ['cvsRms', 'cvsSnr', 'cvsKurt', 'cvsSpec'];
+            cvsIds.forEach(id => { let c = document.getElementById(id); if(c) { c.width = c.offsetWidth; c.height = c.offsetHeight; } });
+        });
+
+        // ==========================================
+        // 📂 FILE MANAGER & PATIENT ID SYSTEM
+        // ==========================================
+        async function setPatientId() {
+            let id = document.getElementById("patientId").value.trim();
+            if(!id) { alert("กรุณาใส่ ID คนไข้ก่อนกด SET ID ครับ!"); return; }
+            if(!connected) { alert("กรุณาเชื่อมต่อ BLE ก่อนครับ!"); return; }
+            
+            // ตัดช่องว่างและตัวอักษรแปลกๆ ออก
+            id = id.replace(/[^a-zA-Z0-9_-]/g, ""); 
+            await sendCmd("ID:" + id);
+            alert("✅ ตั้งชื่อไฟล์เป็น: " + id + ".bin เรียบร้อย!\n\n(กดสวิตช์ SW2 ที่บอร์ดค้าง 2 วิ เพื่อเริ่มอัดไฟล์ได้เลย)");
+        }
+
+        async function requestFileList() {
+            if(!connected) { alert("กรุณาเชื่อมต่อ BLE ก่อนครับ!"); return; }
+            let fileDisplay = document.getElementById("fileListDisplay");
+            fileDisplay.innerHTML = "<span style='color:#f59e0b;'>⏳ กำลังดึงรายชื่อไฟล์... (กราฟอาจสะดุดเล็กน้อย)</span>";
+            await sendCmd("LS"); // สั่ง 'L' = Soft Check โชว์ไฟล์เฉยๆ
+        }
+
+        async function forceCheckSD() {
+            if(!connected) { alert("กรุณาเชื่อมต่อ BLE ก่อนครับ!"); return; }
+            let fileDisplay = document.getElementById("fileListDisplay");
+            fileDisplay.innerHTML = "<span style='color:#ef4444;'>⚠️ กำลังบังคับตัดไฟและ Mount SD Card ใหม่...</span>";
+            await sendCmd("C"); // สั่ง 'C' = Hard Check บังคับเมานท์ใหม่
+        }
+
+        // ==========================================
+        // ⚙️ ADS1292R REGISTER SIMULATION SYSTEM
+        // ==========================================
+        // ฟังก์ชันกาง/เก็บ กล่อง
+        function toggleRegPanel() {
+            let panel = document.getElementById("regPanel");
+            let icon = document.getElementById("regToggleIcon");
+            if (panel.style.display === "none") {
+                panel.style.display = "block";
+                icon.innerText = "▲ HIDE REGISTERS";
+                updateRegistersUI(); // ควบคุมให้อัปเดตทันทีที่กางออก
+            } else {
+                panel.style.display = "none";
+                icon.innerText = "▼ SHOW REGISTERS";
+            }
+        }
+
+        // แปลงตัวเลขเป็น 0000 0000
+        function toBinString(num) {
+            let bin = num.toString(2).padStart(8, '0');
+            return bin.substring(0,4) + " " + bin.substring(4,8);
+        }
+
+        // แปลงตัวเลขเป็น 0x00
+        function toHexString(num) {
+            return "0x" + num.toString(16).padStart(2, '0').toUpperCase();
+        }
+
+        // อัปเดตข้อมูลให้ตรงกับที่ส่งไปให้ C++
+        function updateRegistersUI() {
+            let sps = getVal("spsSelect", '500');
+            let gain = getVal("gainSelect", '6');
+
+            // 1. จำลอง CONFIG1 (0x01) - Data Rate
+            let config1 = 0x02; // 500SPS
+            if(sps === '250') config1 = 0x01;
+            else if(sps === '1000') config1 = 0x03;
+
+            // 2. จำลอง CONFIG2 (0x02) - Test Signal
+            let config2 = isTestSignal ? 0xA3 : 0xA0;
+
+            // 3. LOFF (0x03) - Lead-off
+            let loff = 0xCC;
+
+            // 4. CH1SET (0x04) - ปิด Channel 1
+            let ch1set = 0x81; 
+
+            // 5. จำลอง CH2SET (0x05) - Gain & MUX
+            let gainHex = 0x00; 
+            if(gain === '1') gainHex = 0x10;
+            else if(gain === '2') gainHex = 0x20;
+            else if(gain === '3') gainHex = 0x30;
+            else if(gain === '4') gainHex = 0x40;
+            else if(gain === '8') gainHex = 0x50;
+            else if(gain === 'm' || gain === 'M') gainHex = 0x60;
+
+            let muxHex = 0x00; // Normal Input
+            if(isTestSignal) muxHex = 0x05;    // Test Signal
+            else if(isNoiseTest) muxHex = 0x01; // Input Shorted
+
+            let ch2set = gainHex | muxHex;
+
+            // 6. RLD_SENS (0x06)
+            let rld_sens = isRldOn ? 0x2C : 0x20;
+            // 7. RESP1 (0x09) & RESP2 (0x0A)
+            let resp1 = 0x02;
+            let resp2 = 0x03;
+
+            // มัดรวมใส่ Array เพื่อนำไปแสดงผล
+            let regs = [
+                {addr: '0x01', name: 'CONFIG1', val: config1},
+                {addr: '0x02', name: 'CONFIG2', val: config2},
+                {addr: '0x03', name: 'LOFF', val: loff},
+                {addr: '0x04', name: 'CH1SET', val: ch1set},
+                {addr: '0x05', name: 'CH2SET', val: ch2set},
+                {addr: '0x06', name: 'RLD_SENS', val: rld_sens},
+                {addr: '0x09', name: 'RESP1', val: resp1},
+                {addr: '0x0A', name: 'RESP2', val: resp2}
+            ];
+
+            let html = "";
+            regs.forEach(r => {
+                html += `<div style="background:#0b0f19; padding:10px 15px; border:1px solid #1e293b; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:#94a3b8;"><span style="color:#64748b;">[${r.addr}]</span> &nbsp;${r.name}</div>
+                            <div style="color:#00f3ff; font-weight:bold; font-size: 14px;">${toHexString(r.val)} <span style="color:#f59e0b; opacity: 0.8; margin-left: 8px;">| ${toBinString(r.val)}</span></div>
+                        </div>`;
+            });
+
+            let rc = document.getElementById("regContent");
+            if(rc) rc.innerHTML = html;
+        }
+
+        let isWebRecording = false;
+        let recordInterval = null; // 🌟 เก็บตัวนับเวลาไว้ใช้เคลียร์ตอนกดหยุด
+
+        async function triggerWebRecord() {
+            if(!connected) { alert("กรุณาเชื่อมต่อ BLE ก่อนครับ!"); return; }
+            let btn = document.getElementById("btnWebRec");
+
+            if (!isWebRecording) {
+                let sec = parseInt(document.getElementById("recordSec").value) || 5;
+                if (sec <= 0) { alert("กรุณาใส่เวลาให้ถูกต้องครับ"); return; }
+                
+                // ส่งคำสั่งอัด
+                await sendCmd("R:" + sec);
+                isWebRecording = true;
+                
+                // 🌟 ระบบนับเวลาถอยหลัง Live Countdown
+                let remainingSec = sec;
+                btn.innerHTML = `⏹ REC (${remainingSec}s)`;
+                btn.style.background = "#6b7280";
+                
+                if (recordInterval) clearInterval(recordInterval);
+                
+                recordInterval = setInterval(() => {
+                    remainingSec--;
+                    if (remainingSec > 0) {
+                        btn.innerHTML = `⏹ REC (${remainingSec}s)`; // อัปเดตตัวเลขลดลงเรื่อยๆ
+                    } else {
+                        // หมดเวลา ล้างค่าคืนปุ่ม
+                        clearInterval(recordInterval);
+                        if (isWebRecording) {
+                            isWebRecording = false;
+                            btn.innerHTML = "⏺ START RECORD";
+                            btn.style.background = "#ef4444";
+                        }
+                    }
+                }, 1000); 
+                
+                // Backup ตัวเดิมเผื่อเหนียวกรณีเน็ตกระตุก
+                setTimeout(() => {
+                    if (isWebRecording) {
+                        clearInterval(recordInterval);
+                        isWebRecording = false;
+                        btn.innerHTML = "⏺ START RECORD";
+                        btn.style.background = "#ef4444";
+                    }
+                }, (sec * 1000) + 1500); 
+                
+            } else {
+                // กดหยุดก่อนเวลา
+                await sendCmd("R:0"); 
+                isWebRecording = false;
+                if (recordInterval) clearInterval(recordInterval); // ยกเลิกการนับเวลาถอยหลัง
+                btn.innerHTML = "⏺ START RECORD";
+                btn.style.background = "#ef4444";
+            }
+        }
+    </script>
+</body>
+</html>
