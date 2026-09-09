@@ -2321,6 +2321,7 @@ body:has(.vital-tag.alert) .app-header{
                 <button class="btn sm" id="btnSpiApplyBest" onclick="applyRecommendedSpi()" disabled>APPLY RECOMMENDED</button>
                 <button class="btn sm" onclick="forgetSpiChoice()">FORGET</button>
               </div>
+              <p class="status-line" id="spiConfLine" style="margin-top:6px">No frames checked at this clock yet.</p>
               <p class="status-line" id="spiRememberLine" style="margin-top:6px">The board boots at 250 kHz every time; nothing is remembered yet.</p>
             </div>
           </div>
@@ -4167,15 +4168,95 @@ function updateSystemTelemetry(f) {
   bar.style.width = Math.min(100, loadPercent) + '%';
   bar.style.background = loadPercent > 45 ? 'var(--alarm-high)' : loadPercent > 20 ? 'var(--alarm-med)' : 'var(--state-ok)';
 
+  /* The counter that actually settles the question.
+
+     Every acquisition frame is preamble-checked, so this grows at the
+     sample rate under the real load rather than in an eighty-trial burst,
+     and the bound it supports tightens all day. It is reset by changing
+     the clock, which is correct: evidence gathered at 500 kHz says nothing
+     about 1 MHz. */
   const errors = Number(f.SPIERR)||0, checked = Number(f.SPIN)||0;
   const errTile = $('spiErrTile');
   errTile.textContent = checked ? `${errors} / ${checked.toLocaleString()}` : '—';
-  errTile.className = errors > 0 ? 'bad' : 'good';
+  errTile.className = errors > 0 ? 'bad' : checked > 2e6 ? 'good' : 'warn';
+  errTile.title = checked
+    ? `At this clock, since it was last changed: ${describeBound(errors, checked, currentSps)}.`
+      + (errors === 0 && checked < 2e6
+          ? ` Keep it running — about ${Math.max(1, Math.round((2.6e6 - checked)/(currentSps||500)/60))}`
+            + ' more minutes of clean frames before this bound gets under one bad frame a day.'
+          : '')
+    : 'No frames checked yet.';
+  const confEl = $('spiConfLine');
+  if (confEl) {
+    confEl.textContent = checked
+      ? `Live evidence at ${formatHz(Number(f.SPIHZ) || deviceSpiHz || 0)}: `
+        + `${errors} bad in ${checked.toLocaleString()} frames — ${describeBound(errors, checked, currentSps)}. `
+        + (errors > 0
+            ? 'Errors at this clock mean the wiring will not carry it. Drop one notch and re-run the test.'
+            : 'The eighty-trial sweep can only bound the rate at 3.7 %; this one keeps tightening for as '
+              + 'long as the board runs.')
+      : 'No frames checked at this clock yet.';
+    confEl.className = 'status-line ' + (errors > 0 ? 'err' : checked > 2e6 ? 'good' : '');
+  }
 }
 
 /* ==================================================================
    8. SPI TUNER
+   ------------------------------------------------------------------
+   What a clean burst test does and does not prove.
+
+   The board tries eighty register reads at each clock and reports how
+   many came back wrong. Eighty clean reads is worth something, and it is
+   worth far less than it looks: with n trials and no failures, the
+   ordinary 95% upper bound on the failure rate is 3/n - the rule of
+   three - so 0/80 only establishes that the rate is under 3.7%.
+
+   Three point seven percent, at 500 frames a second, is one corrupted
+   frame every fifty milliseconds. A link that is genuinely that bad
+   passes this test one time in twenty. A link at 0.1% - one bad frame
+   every two seconds, which destroys a recording - passes it 92% of the
+   time. The test can rule out a link that is broken. It cannot certify
+   one that is merely marginal, and no burst short enough to sit inside a
+   button press ever will.
+
+   What can is runtime. The acquisition ISR checks the 0b1100 preamble on
+   every single frame it reads, so SPIN counts real frames at the real
+   clock under the real load, and it grows all day. Both numbers are
+   shown with the bound they actually support, because "PASS" next to a
+   number that cannot support it is how a marginal clock gets chosen.
    ================================================================== */
+
+// Rule of three for the zero-failure case; a one-sided Poisson bound
+// otherwise. Returned as a rate, not a percentage.
+function errorRateBound(errors, trials) {
+  if (!(trials > 0)) return NaN;
+  if (errors === 0) return 3/trials;
+  // chi-square upper bound at 95% for k observed events, approximated by
+  // k + 1.96*sqrt(k) + 1.5, which is within a few percent for small k and
+  // avoids carrying a table for a number that is only ever a warning.
+  return (errors + 1.96*Math.sqrt(errors) + 1.5)/trials;
+}
+
+// The same bound expressed as what it permits over a recording, which is
+// the form the decision is actually made in.
+function boundPerDay(rate, sps) {
+  if (!Number.isFinite(rate) || !(sps > 0)) return NaN;
+  return rate*sps*86400;
+}
+
+function describeBound(errors, trials, sps) {
+  const rate = errorRateBound(errors, trials);
+  if (!Number.isFinite(rate)) return '—';
+  const perDay = boundPerDay(rate, sps || 500);
+  const pct = rate*100;
+  const rateText = pct >= 0.1 ? `${pct.toFixed(2)} %` : `${(rate*1e6).toFixed(1)} ppm`;
+  const dayText = perDay >= 1e6 ? `${(perDay/1e6).toFixed(1)}M`
+                : perDay >= 1000 ? `${Math.round(perDay/1000)}k`
+                : perDay >= 1 ? String(Math.round(perDay))
+                : perDay >= 0.01 ? perDay.toFixed(2) : '<0.01';
+  return `< ${rateText} · up to ${dayText} bad frames in 24 h`;
+}
+
 let spiSweepRows = [];
 
 /* The ADS SCLK is the board's biggest single CPU cost and the firmware
@@ -4299,11 +4380,21 @@ function renderSpiSweep(note) {
       const row = document.createElement('tr');
       const pass = r.errors === 0;
       const load = currentSps ? (r.frameUs*currentSps/10000).toFixed(1) : '—';
-      [formatHz(r.hz), `${r.errors} / ${r.trials}`, `${r.frameUs} µs · ${load}% CPU`, pass ? 'PASS' : 'FAIL']
+      // "PASS" on its own is the reading that chose a marginal clock here,
+      // so the verdict column carries what eighty trials can support.
+      [formatHz(r.hz), `${r.errors} / ${r.trials}`, `${r.frameUs} µs · ${load}% CPU`,
+       (pass ? 'PASS · ' : 'FAIL · ') + describeBound(r.errors, r.trials, currentSps)]
         .forEach((v, i) => {
           const cell = document.createElement('td');
           cell.textContent = v;
-          if (i === 3) cell.style.color = pass ? 'var(--state-ok)' : 'var(--alarm-high)';
+          if (i === 3) {
+            cell.style.color = pass ? 'var(--ink-mid)' : 'var(--alarm-high)';
+            cell.title = pass
+              ? `${r.trials} clean trials bounds the error rate at 3/${r.trials} with 95% confidence — `
+                + 'the rule of three. That is enough to rule out a broken link and not enough to certify '
+                + 'a marginal one. Runtime is what settles it: watch FRAMING ERRORS accumulate.'
+              : 'Errors at this clock. The bound is a one-sided Poisson estimate on the rate observed.';
+          }
           row.appendChild(cell);
         });
       body.appendChild(row);
