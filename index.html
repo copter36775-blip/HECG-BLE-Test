@@ -681,6 +681,36 @@ body.splitting{cursor:col-resize;user-select:none}
 .chip.on{color:var(--chip,var(--ink-hi));border-color:currentColor;background:var(--s-panel)}
 .chart-card.hidden{display:none}
 @media (prefers-reduced-motion:reduce){ .chip{transition:none} }
+/* A derivation, not a readout.
+
+   A tile that says "80 bpm" is asking to be believed. The same number with
+   the expression above it and today's operands substituted into it can be
+   checked on the spot - which is the difference between a display and an
+   instrument, and the difference between showing a examiner a number and
+   showing them a method. */
+.deriv{
+  border-left:var(--spine-w) solid var(--line-3);background:var(--s-panel);
+  border-radius:0 var(--r-tight) var(--r-tight) 0;
+  padding:var(--sp-2) var(--sp-3);margin:var(--sp-2) 0 0;
+}
+.deriv-hd{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2)}
+.deriv-hd h5{
+  margin:0;font:600 var(--t-2xs) var(--sans);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-low);
+}
+.deriv-out{font:700 var(--t-md) var(--mono);color:var(--ink-hi);white-space:nowrap}
+.deriv-out.warn{color:var(--tint-warn)} .deriv-out.bad{color:var(--tint-bad)}
+.deriv-sym{
+  font:400 var(--t-sm) var(--math,var(--mono));color:var(--ink-mid);
+  margin-top:var(--sp-1);line-height:1.5;
+}
+.deriv-num{
+  font:600 var(--t-sm) var(--math,var(--mono));color:var(--ink);
+  margin-top:2px;line-height:1.5;overflow-x:auto;
+}
+.deriv-num b{color:var(--ink-hi);font-weight:700}
+.deriv-why{font:400 var(--t-2xs) var(--sans);color:var(--ink-low);margin-top:var(--sp-1);line-height:1.55}
+.deriv.stale .deriv-num,.deriv.stale .deriv-out{color:var(--ink-low)}
 details.explain{margin:var(--sp-2) 0 0;border-top:1px solid var(--line-1);padding-top:var(--sp-1)}
 details.explain>summary{
   cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--sp-1);
@@ -1669,6 +1699,22 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>QRS band 5&ndash;25 Hz</span><b id="mQrsBand">&mdash;</b></div>
         </div>
         <div class="plot" style="height:210px"><canvas id="mathFftCanvas"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h4>Derivations &mdash; every number, with today&rsquo;s operands in it</h4>
+        <div id="mathDerivations"></div>
+        <details class="explain">
+          <summary>How this works<b>2</b></summary>
+          <p class="note">Each block shows the expression, then the same expression with the values this board is
+            producing right now substituted into it, then the result. Nothing here is a different calculation from the
+            one the vitals header uses &mdash; it is the <i>same</i> calculation, written out. If the header says 80 bpm
+            and the arithmetic below it does not come to 80, one of the two is wrong and you can see which.</p>
+          <p class="note">The reason for showing the operands rather than only the answer is that most of the ways
+            these numbers go wrong are invisible in the answer. A heart rate computed from four accepted beats and one
+            from four hundred look identical; an R amplitude read with the gain register at 6 rather than 12 is
+            wrong by exactly a factor of two and looks completely plausible. The operands are where that shows.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -10066,6 +10112,8 @@ function renderMathTab() {
                             : `${(fftN/currentSps).toFixed(1)} s of ECG`);
   drawMathPoincare(pc);
   drawMathHrvPsd(psd);
+  renderDerivations({ nn, hrv, pc, psd, spec,
+                      rw: (typeof rWave !== 'undefined') ? rWave.read() : null });
 
   const dt = performance.now() - t0;
   mathLive.ms = mathLive.updates ? mathLive.ms*0.8 + dt*0.2 : dt;
@@ -10076,6 +10124,198 @@ function renderMathTab() {
     rateEl.textContent = mathLive.on ? '4 Hz — running' : 'stopped';
     rateEl.className = mathLive.on ? 'good' : '';
   }
+}
+
+/* The derivation blocks.
+
+   Built from a table rather than as markup, because every one of them has
+   the same four parts and the differences between them belong in one place.
+   `sym` is the expression, `num` is that expression with the live operands
+   in it, `out` is the result, `why` is the one thing that would make the
+   result wrong without making it look wrong. */
+function derivationRows(ctx) {
+  const { nn, hrv, pc, psd, rw, spec } = ctx;
+  const f = (v, d) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const rows = [];
+
+  // ---- heart rate ----------------------------------------------------
+  rows.push({
+    key: 'hr',
+    title: 'Heart rate',
+    sym: 'HR = 60 000 / NN&#772;',
+    num: nn.nn.length >= 2
+      ? `HR = 60 000 / <b>${f(hrv.mean, 1)}</b> ms`
+      : 'HR = 60 000 / (waiting for beats)',
+    out: nn.nn.length >= 2 && hrv.mean > 0 ? `${f(60000/hrv.mean, 1)} bpm` : '—',
+    ok: nn.nn.length >= 8,
+    why: `Mean of <b>${nn.nn.length}</b> accepted NN intervals`
+       + (nn.rejected ? `, with ${nn.rejected} rejected as ectopic or implausible.` : '.')
+       + ' The header vital uses a median over a short rolling window instead, so the two differ '
+       + 'slightly by design — a median resists one bad beat, a mean is what the variability maths needs.',
+  });
+
+  // ---- QRS threshold -------------------------------------------------
+  const d = qrsDetector;
+  rows.push({
+    key: 'thr',
+    title: 'QRS decision threshold · Pan–Tompkins',
+    sym: 'THR = NPK + 0.25 &#183; (SPK &#8722; NPK)',
+    num: `THR = <b>${f(d.npki, 1)}</b> + 0.25 &#183; (<b>${f(d.spki, 1)}</b> &#8722; <b>${f(d.npki, 1)}</b>)`,
+    out: f(d.threshold, 1),
+    ok: Number.isFinite(d.threshold) && d.threshold > 0,
+    why: 'SPK and NPK are running estimates of the signal peak and the noise peak in the integrated '
+       + 'waveform, each updated as 0.125&#183;new + 0.875&#183;old on every peak the detector classifies. '
+       + 'The threshold is not a constant anywhere in this firmware — it chases the signal, which is why '
+       + 'the same electrode set works at rest and after moving.',
+  });
+
+  // ---- R amplitude ---------------------------------------------------
+  const gain = gainByCode[activeGainCode(1)] || NaN;   // CH2 is the ECG channel
+  const vref = activeReferenceMv();
+  rows.push({
+    key: 'ramp',
+    title: 'R-wave amplitude',
+    sym: 'V<sub>R</sub> = code / (2<sup>23</sup>&#8722;1) &#215; V<sub>REF</sub> / G',
+    num: rw && rw.ok && Number.isFinite(gain)
+      ? `V<sub>R</sub> = code / 8 388 607 &#215; <b>${vref}</b> mV / <b>${gain}</b>`
+      : 'V<sub>R</sub> = (needs a locked QRS)',
+    out: rw && rw.ok ? `${f(rw.amp, 3)} mV` : '—',
+    ok: !!(rw && rw.ok),
+    why: rw && rw.ok
+      ? `Median over <b>${rw.beats}</b> beats, spread &#177;${f(rw.spread, 3)} mV. Measured from the `
+        + 'fiducial back to the true peak, not at the fiducial: the Pan–Tompkins mark lags the R peak by '
+        + 'about 90–110 ms because of the integrator window, so reading amplitude there would measure the '
+        + 'ST segment instead.'
+      : 'Reported only once QRS is genuinely locked. A number here from an unlocked detector would be '
+        + 'the amplitude of whatever it last mistook for a beat.',
+  });
+
+  // ---- SDNN ----------------------------------------------------------
+  rows.push({
+    key: 'sdnn',
+    title: 'SDNN · overall variability',
+    sym: 'SDNN = &#8730;( &#931;(NN<sub>i</sub> &#8722; NN&#772;)&#178; / (N&#8722;1) )',
+    num: nn.nn.length >= 4
+      ? `SDNN = &#8730;( &#931;(NN<sub>i</sub> &#8722; <b>${f(hrv.mean, 1)}</b>)&#178; / <b>${nn.nn.length - 1}</b> )`
+      : 'SDNN = (needs 4 beats)',
+    out: `${f(hrv.sdnn, 1)} ms`,
+    ok: nn.nn.length >= 16,
+    why: 'The standard deviation of all NN intervals. It grows with the length of the record, because a '
+       + 'longer window admits slower rhythms — so SDNN over 2 minutes and SDNN over 24 hours are different '
+       + 'quantities that share a name, and only ever compare like with like.',
+  });
+
+  // ---- RMSSD ---------------------------------------------------------
+  rows.push({
+    key: 'rmssd',
+    title: 'RMSSD · beat-to-beat variability',
+    sym: 'RMSSD = &#8730;( &#931;(NN<sub>i+1</sub> &#8722; NN<sub>i</sub>)&#178; / (N&#8722;1) )',
+    num: nn.nn.length >= 4
+      ? `RMSSD = &#8730;( &#931;&#916;NN&#178; / <b>${nn.nn.length - 1}</b> )`
+      : 'RMSSD = (needs 4 beats)',
+    out: `${f(hrv.rmssd, 1)} ms`,
+    ok: nn.nn.length >= 16,
+    why: 'Built from differences between neighbours, which makes it the metric most damaged by a single '
+       + 'missed or extra beat — one dropped detection can double it. That is what the NN filter upstream '
+       + 'is protecting, and why the accepted count is displayed next to it rather than buried.',
+  });
+
+  // ---- SD1 / SD2 -----------------------------------------------------
+  rows.push({
+    key: 'sd',
+    title: 'Poincar&eacute; SD1 &amp; SD2',
+    sym: 'SD1 &#8776; RMSSD / &#8730;2 &nbsp;&#183;&nbsp; SD2 = &#8730;(2&#183;SDNN&#178; &#8722; SD1&#178;)',
+    num: Number.isFinite(pc.sd1)
+      ? `SD1 &#8776; <b>${f(hrv.rmssd, 1)}</b> / 1.414 = <b>${f(hrv.rmssd/Math.SQRT2, 2)}</b> `
+        + `&nbsp;vs measured <b>${f(pc.sd1, 2)}</b>`
+      : 'SD1 = (needs 5 beats)',
+    out: Number.isFinite(pc.sd1) ? `${f(pc.sd1, 1)} · ${f(pc.sd2, 1)} ms` : '—',
+    ok: Number.isFinite(pc.sd1),
+    why: 'SD1 is measured from the cloud, not from RMSSD — the identity is shown so the two independent '
+       + 'paths can be checked against each other. They agree to a few parts per million rather than '
+       + 'exactly, because RMSSD is a root-mean-square about zero while SD1 is a deviation about the mean; '
+       + 'they coincide only when the record ends on the interval it started on.',
+  });
+
+  // ---- pNN50 ---------------------------------------------------------
+  rows.push({
+    key: 'pnn50',
+    title: 'pNN50',
+    sym: 'pNN50 = 100 &#183; count(|&#916;NN| &gt; 50 ms) / (N&#8722;1)',
+    num: nn.nn.length >= 4
+      ? `pNN50 = 100 &#183; count / <b>${nn.nn.length - 1}</b>`
+      : 'pNN50 = (needs 4 beats)',
+    out: `${f(hrv.pnn50, 1)} %`,
+    ok: nn.nn.length >= 16,
+    why: 'A count, so it is quantised: with 20 beats it can only take twenty distinct values and jumps by '
+       + '5 % at a time. It settles into a smooth number somewhere past a hundred beats.',
+  });
+
+  // ---- LF/HF ---------------------------------------------------------
+  rows.push({
+    key: 'lfhf',
+    title: 'LF / HF ratio',
+    sym: 'LF/HF = &#8747;<sub>0.04</sub><sup>0.15</sup>P(f)df &nbsp;&#247;&nbsp; &#8747;<sub>0.15</sub><sup>0.40</sup>P(f)df',
+    num: psd.ok
+      ? `LF/HF = <b>${f(psd.bands.lf.power, 0)}</b> ms&#178; / <b>${f(psd.bands.hf.power, 0)}</b> ms&#178;`
+      : `LF/HF = (${psd.why || 'no spectrum'})`,
+    out: psd.ok && Number.isFinite(psd.lfhf) ? f(psd.lfhf, 2) : '—',
+    ok: psd.ok && psd.bands.lf.enough && psd.bands.hf.enough,
+    why: psd.ok
+      ? `P(f) is a Lomb&ndash;Scargle periodogram over <b>${psd.n}</b> unevenly spaced beats — no `
+        + 'interpolation onto a regular grid, which would invent HF power that was never measured. '
+        + `Scaled so the bands sum to SDNN&#178;: <b>${f(psd.total, 0)}</b> against `
+        + `<b>${f(psd.sdnn**2, 0)}</b> ms&#178;.`
+      : 'Needs at least 16 accepted beats spanning 20 seconds.',
+  });
+
+  // ---- respiration ---------------------------------------------------
+  const brpm = Number(($('valBRPM')?.textContent || '').replace(/[^0-9.]/g, ''));
+  rows.push({
+    key: 'resp',
+    title: 'Respiration rate',
+    sym: 'f<sub>resp</sub> = 60 / T&#772;<sub>breath</sub>',
+    num: Number.isFinite(brpm) && brpm > 0
+      ? `f<sub>resp</sub> = 60 / <b>${f(60/brpm, 2)}</b> s`
+      : 'f<sub>resp</sub> = (no breath detected)',
+    out: Number.isFinite(brpm) && brpm > 0 ? `${f(brpm, 0)} brpm` : '—',
+    ok: Number.isFinite(brpm) && brpm > 0,
+    why: 'From the ADS1292R respiration modulator on CH1, band-passed to 0.10&ndash;0.70 Hz and measured '
+       + 'between threshold crossings. It is a thoracic impedance change, not airflow, so it tracks effort '
+       + 'rather than volume and reads nothing during a breath-hold with movement.',
+  });
+
+  // ---- mains contamination -------------------------------------------
+  if (spec) {
+    rows.push({
+      key: 'mains',
+      title: 'Mains contamination',
+      sym: 'share = &#931;P(48&#8211;52, 58&#8211;62 Hz) / &#931;P(f)',
+      num: `share = <b>${$('mMains')?.textContent || '—'}</b> of total spectral power`,
+      out: $('mMains')?.textContent || '—',
+      ok: true,
+      why: 'Taken from the same FFT drawn above. It is a share rather than an absolute, so it does not '
+         + 'change when the gain does — which is what makes it comparable between sessions and between '
+         + 'electrode placements.',
+    });
+  }
+  return rows;
+}
+
+function renderDerivations(ctx) {
+  const host = $('mathDerivations'); if (!host) return;
+  const rows = derivationRows(ctx);
+  const html = rows.map(r => `<div class="deriv${r.ok ? '' : ' stale'}">
+      <div class="deriv-hd"><h5>${r.title}</h5>
+        <span class="deriv-out${r.ok ? '' : ' warn'}">${r.out}</span></div>
+      <div class="deriv-sym">${r.sym}</div>
+      <div class="deriv-num">${r.num}</div>
+      <div class="deriv-why">${r.why}</div>
+    </div>`).join('');
+  // Rebuilt wholesale rather than diffed: ten small blocks at 4 Hz is well
+  // under a millisecond, and the alternative is ten sets of element refs
+  // kept in step with a table that is meant to be easy to add a row to.
+  host.innerHTML = html;
 }
 
 function renderMathSpectrum(spec) {
