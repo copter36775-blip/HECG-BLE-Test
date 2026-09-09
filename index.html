@@ -2179,7 +2179,7 @@ body:has(.vital-tag.alert) .app-header{
             <div class="tile"><span>Next write</span><b id="sdBufEta">&mdash;</b></div>
             <div class="tile"><span>Last write</span><b id="sdLastWrite">&mdash;</b></div>
             <div class="tile"><span>Interval</span><b id="sdWriteGap">&mdash;</b></div>
-            <div class="tile"><span>Writes this run</span><b id="sdWriteCount">&mdash;</b></div>
+            <div class="tile"><span>Writes</span><b id="sdWriteCount">&mdash;</b></div>
             <div class="tile"><span>Data at risk</span><b id="sdAtRisk">&mdash;</b></div>
             <div class="tile"><span>Write duration</span><b id="sdWriteMs">&mdash;</b></div>
             <div class="tile"><span>Card shuffling</span><b id="sdShuffle">&mdash;</b></div>
@@ -4392,7 +4392,7 @@ let sdLastKib = 0;
 const sdWrite = { ops: null, bytesAtFlush: 0, at: 0, gaps: [], bytes: 0,
                   lastBytes: 0, lastBytesAt: 0, rate: 0,
                   burstAt: 0, drained: 0, syncs: 0, wasBurst: false,
-                  ms: null, durations: [] };
+                  ms: null, durations: [], opsAtStart: null };
 
 function resetWriteCadence() {
   sdWrite.ops = null; sdWrite.bytesAtFlush = 0; sdWrite.at = 0;
@@ -4400,7 +4400,7 @@ function resetWriteCadence() {
   sdWrite.lastBytes = 0; sdWrite.lastBytesAt = 0; sdWrite.rate = 0;
   sdWrite.burstAt = 0; sdWrite.drained = 0; sdWrite.syncs = 0;
   sdWrite.wasBurst = false;
-  sdWrite.ms = null; sdWrite.durations.length = 0;
+  sdWrite.ms = null; sdWrite.durations.length = 0; sdWrite.opsAtStart = null;
 }
 
 const sdMedian = list => {
@@ -4509,9 +4509,28 @@ function renderWriteCadence() {
   setText('sdWriteGap', gaps.length
     ? `${gaps[gaps.length-1].toFixed(1)} s \u00b7 avg ${avg.toFixed(1)} s`
     : 'measuring\u2026');
+  /* PWR:SDOPS counts every SD transaction since the board booted and is
+     never reset by starting a recording, so a tile headed "writes this run"
+     was showing a number from previous runs too - 44 writes against a file
+     holding ten seconds of ECG, which is what made the card look broken.
+
+     The run figure is the difference from where the counter stood when this
+     recording started; the board's own total is kept beside it, because the
+     card's wear and the run's cadence are both worth knowing and they are
+     not the same number. */
   const ops = Number(pwrState.SDOPS);
-  setText('sdWriteCount', Number.isFinite(ops)
-    ? `${ops.toLocaleString()} \u00b7 ${sdWrite.syncs.toLocaleString()} FAT` : '\u2014');
+  if (Number.isFinite(ops) && sdWrite.opsAtStart === null) sdWrite.opsAtStart = ops;
+  const thisRun = Number.isFinite(ops) && sdWrite.opsAtStart !== null
+    ? ops - sdWrite.opsAtStart : NaN;
+  const countEl = $('sdWriteCount');
+  if (countEl) {
+    countEl.textContent = Number.isFinite(thisRun)
+      ? `${thisRun.toLocaleString()} this run \u00b7 ${ops.toLocaleString()} since boot`
+      : '\u2014';
+    countEl.title = sdWrite.syncs
+      ? `${sdWrite.syncs.toLocaleString()} of them were FAT syncs rather than data bursts.`
+      : 'No FAT sync has been seen in this run yet.';
+  }
 
   const durs = sdWrite.durations.map(d => d.ms);
   const med = sdMedian(durs);
@@ -4559,11 +4578,14 @@ function drawWriteTrace() {
   for (const frac of [0.33, 0.66]) { const y = Math.round(pad + (h-pad)*frac)+0.5; g.moveTo(0, y); g.lineTo(w, y); }
   g.stroke();
 
-  if (!list.length) {
+  if (list.length < 3) {
     g.fillStyle = 'rgba(146,176,210,.5)';
     g.font = '600 10px ui-monospace, monospace';
-    g.fillText('waiting for the first write', 8, h/2);
-    return;
+    g.fillText(list.length === 0
+      ? 'waiting for the first write'
+      : `${list.length} write${list.length === 1 ? '' : 's'} so far — a Holter burst lands every ~7.5 s`,
+      8, h/2);
+    if (!list.length) return;
   }
 
   const step = Math.max(1.5, Math.min(9, (w - 12)/Math.max(1, list.length)));
@@ -4586,13 +4608,17 @@ function drawWriteTrace() {
     g.beginPath(); g.moveTo(x, h - 4); g.lineTo(x, yOf(d.ms)); g.stroke();
   });
 
+  // h - 3 - (h - 14) is 11 for every h, so the run summary was being drawn
+  // on top of the axis maximum at exactly the same point - which is why the
+  // corner read "30writes . median 13 ms". Two lines, two rows.
   g.fillStyle = 'rgba(146,176,210,.65)';
   g.font = '600 9px ui-monospace, monospace';
   g.fillText(`${top.toFixed(0)} ms`, 4, 11);
-  g.fillText(`${list.length} writes \u00b7 median ${Number.isFinite(med) ? med.toFixed(0) : '?'} ms`,
-             4, h - 3 - (h - 14));
   const label = 'card busy per write';
   g.fillText(label, w - g.measureText(label).width - 5, 11);
+  g.fillText(`${list.length} write${list.length === 1 ? '' : 's'} shown`
+             + (Number.isFinite(med) ? ` \u00b7 median ${med.toFixed(0)} ms` : ''),
+             4, h - 6);
 }
 
 function updateSdTelemetry(f) {
