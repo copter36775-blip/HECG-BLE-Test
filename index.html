@@ -4456,7 +4456,13 @@ async function subscribeDiagnostics(enable) {
     for (let attempt = 0; attempt < 2; attempt++) {
       diagSubscribed = false; sdSubAckAt = 0;
       if (!(await sendCmd('SD:SUB:1'))) return false;
-      if (await waitForSdSubAck(900)) { await sendCmd('DIRS?'); return true; }
+      // 900 ms was under the firmware's own worst case. Four queued status
+      // messages at the slow 250 ms notify gap put an ACK on the air at a
+      // full second, so the panel declared the board unresponsive while it
+      // was recording normally. The firmware now drains fast whenever a
+      // reply is waiting; this is the belt to that pair of braces, and it
+      // costs nothing when the board answers promptly.
+      if (await waitForSdSubAck(2000)) { await sendCmd('DIRS?'); return true; }
       logLine('er', `SD:SUB:1 not acknowledged (attempt ${attempt + 1}/2)`);
     }
     setSdMessage('The board did not confirm the SD subscription. Press REFRESH to retry, '
