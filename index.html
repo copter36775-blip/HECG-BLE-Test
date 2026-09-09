@@ -658,6 +658,51 @@ body.splitting{cursor:col-resize;user-select:none}
 .check:hover{background:var(--s-hover)}
 .check input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;flex-shrink:0}
 .check>span{font:500 var(--t-sm) var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)}
+/* Collapsed explanation.
+
+   Every one of these paragraphs earns its place - they are what stops a
+   number being taken on trust - but forty-one of them stacked open turn a
+   panel into a document you scroll past to reach the control. Closed by
+   default, open state remembered per block, and warnings deliberately
+   excluded from the whole mechanism: a warning nobody can see is not a
+   warning. */
+/* Trace chips. Same idea as the solo button next to each trace, from the
+   other end: solo answers "only this one", the chips answer "not that one".
+   A hidden trace is display:none rather than zero-height, so its canvas
+   stops being laid out at all and the ones left take the whole stack. */
+.chiprow{display:flex;gap:4px;flex-wrap:wrap}
+.chip{
+  font:600 var(--t-2xs) var(--mono);letter-spacing:.04em;
+  padding:3px 8px;border-radius:var(--r-round);cursor:pointer;
+  border:1px solid var(--line-2);background:transparent;color:var(--ink-low);
+  transition:color .14s var(--ease),border-color .14s var(--ease),background .14s var(--ease);
+}
+.chip:hover{color:var(--ink-hi);border-color:var(--line-3)}
+.chip.on{color:var(--chip,var(--ink-hi));border-color:currentColor;background:var(--s-panel)}
+.chart-card.hidden{display:none}
+@media (prefers-reduced-motion:reduce){ .chip{transition:none} }
+details.explain{margin:var(--sp-2) 0 0;border-top:1px solid var(--line-1);padding-top:var(--sp-1)}
+details.explain>summary{
+  cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--sp-1);
+  font:600 var(--t-2xs) var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-low);padding:2px 0;user-select:none;transition:color .14s var(--ease);
+}
+details.explain>summary::-webkit-details-marker{display:none}
+details.explain>summary::before{
+  content:"";width:0;height:0;flex:none;
+  border-left:4px solid currentColor;border-top:3.5px solid transparent;
+  border-bottom:3.5px solid transparent;transition:transform .16s var(--ease);
+}
+details.explain[open]>summary::before{transform:rotate(90deg)}
+details.explain>summary:hover,details.explain>summary:focus-visible{color:var(--ink-hi)}
+details.explain>summary>b{
+  font-weight:600;color:var(--ink-low);background:var(--s-panel);
+  border-radius:var(--r-round);padding:0 5px;font-size:9px;line-height:14px;
+}
+details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
+@media (prefers-reduced-motion:reduce){
+  details.explain>summary,details.explain>summary::before{transition:none}
+}
 .note{margin:var(--sp-2) 0 0;font:400 var(--t-xs) var(--sans);line-height:1.65;color:var(--ink-low)}
 .note b{color:var(--ink-mid);font-weight:600}
 .callout{margin:var(--sp-2) 0 0;padding:var(--sp-2) var(--sp-3);border-left:var(--spine-w) solid var(--line-3);background:var(--s-panel);border-radius:0 var(--r-tight) var(--r-tight) 0;font:400 var(--t-xs) var(--sans);line-height:1.65;color:var(--ink-mid)}
@@ -1073,6 +1118,18 @@ body:has(.vital-tag.alert) .app-header{
           <option value="fast" selected>Fast</option><option value="normal">Normal</option><option value="stable">Stable</option>
         </select>
       </label>
+      <div class="field" role="group" aria-label="Visible traces"><span>Traces</span>
+        <div class="chiprow">
+          <button class="chip on" id="tgCard1_ch1" onclick="toggleTrace('card1_ch1')"
+                  style="--chip:var(--sig-resp)">RESP</button>
+          <button class="chip on" id="tgCard3_ch1" onclick="toggleTrace('card3_ch1')"
+                  style="--chip:var(--sig-resp-filt)">RESP&nbsp;F</button>
+          <button class="chip on" id="tgCard1_ch2" onclick="toggleTrace('card1_ch2')"
+                  style="--chip:var(--sig-ecg)">ECG</button>
+          <button class="chip on" id="tgCard3_ch2" onclick="toggleTrace('card3_ch2')"
+                  style="--chip:var(--sig-ecg-filt)">ECG&nbsp;F</button>
+        </div>
+      </div>
       <label class="field"><span>Trace style</span>
         <select id="traceStyle" onchange="applyTraceStyle()">
           <option value="sweep" selected>Sweep — envelope</option>
@@ -1335,13 +1392,16 @@ body:has(.vital-tag.alert) .app-header{
               <div class="tile"><span>Mains pickup</span><b id="elMains">—</b></div>
               <div class="tile"><span>HF noise &gt; 40 Hz</span><b id="elHfNoise">—</b></div>
             </div>
-            <p class="note">Lead-off test: <span id="elSensitivity">—</span></p>
-            <p class="callout">The comparators are a detached-electrode test against the threshold above, not an
-              impedance meter — no ohm value here is measured, it is the trip point the current register pair
-              implies. <span id="elSensitivityHint"></span> Contact quality is a 0–100 index derived from the live
-              signal (wander + mains + broadband noise on the ECG pair), so it degrades as an electrode dries or
-              lifts long before a comparator trips. Electrode names assume the standard cable RA→IN2N, LL→IN2P,
-              RL→RLD.</p>
+            <details class="explain">
+              <summary>How this works<b>2</b></summary>
+              <p class="note">Lead-off test: <span id="elSensitivity">—</span></p>
+              <p class="callout">The comparators are a detached-electrode test against the threshold above, not an
+                impedance meter — no ohm value here is measured, it is the trip point the current register pair
+                implies. <span id="elSensitivityHint"></span> Contact quality is a 0–100 index derived from the live
+                signal (wander + mains + broadband noise on the ECG pair), so it degrades as an electrode dries or
+                lifts long before a comparator trips. Electrode names assume the standard cable RA→IN2N, LL→IN2P,
+                RL→RLD.</p>
+            </details>
           </div>
           <div class="card">
             <h4>LOFF / LOFF_SENS</h4>
@@ -1370,7 +1430,10 @@ body:has(.vital-tag.alert) .app-header{
               <label class="ctl check"><input type="checkbox" id="uiRld2P" onchange="stageFromEditor()"><span>IN2P → RLD</span></label>
               <label class="ctl check"><input type="checkbox" id="uiRld2N" onchange="stageFromEditor()"><span>IN2N → RLD</span></label>
             </div>
-            <p class="callout">LOFF_STAT.RLD_STAT is the only direct hardware indication. The CJMCU bias network (and JP3) can hold that comparator inside its window even with a floating electrode, so amber <b>SUSPECT</b> means the RLD connection cannot be proven — it is never reported as a false green.</p>
+            <details class="explain">
+              <summary>How this works<b>1</b></summary>
+              <p class="callout">LOFF_STAT.RLD_STAT is the only direct hardware indication. The CJMCU bias network (and JP3) can hold that comparator inside its window even with a floating electrode, so amber <b>SUSPECT</b> means the RLD connection cannot be proven — it is never reported as a false green.</p>
+            </details>
           </div>
         </section>
 
@@ -1498,8 +1561,55 @@ body:has(.vital-tag.alert) .app-header{
             <div class="tile"><span>RMSSD</span><b id="aRmssd">—</b></div>
             <div class="tile"><span>pNN50</span><b id="aPnn50">—</b></div>
             <div class="tile"><span>Mean RR</span><b id="aMeanRr">—</b></div>
+            <div class="tile"><span>SD1 &middot; SD2</span><b id="aPoincare">&mdash;</b></div>
+            <div class="tile"><span>SD1/SD2</span><b id="aSdRatio">&mdash;</b></div>
+            <div class="tile"><span>Beats accepted</span><b id="aNnUsed">&mdash;</b></div>
+            <div class="tile"><span>Recording length</span><b id="aNnSpan">&mdash;</b></div>
+          </div>
+
+          <div class="grid2" style="margin-top:9px">
+            <div class="card">
+              <h4>Poincar&eacute; &mdash; RR<sub>n</sub> vs RR<sub>n+1</sub></h4>
+              <div class="plot" style="height:230px"><canvas id="analysisPoincareCanvas"></canvas></div>
+            </div>
+            <div class="card">
+              <h4>HRV spectrum &mdash; Lomb&ndash;Scargle</h4>
+              <div class="plot" style="height:230px"><canvas id="analysisHrvPsdCanvas"></canvas></div>
+            </div>
+          </div>
+          <div class="tiles c4 dense" style="margin-top:9px">
+            <div class="tile"><span>VLF 0.003&ndash;0.04 Hz</span><b id="aVlf">&mdash;</b></div>
+            <div class="tile"><span>LF 0.04&ndash;0.15 Hz</span><b id="aLf">&mdash;</b></div>
+            <div class="tile"><span>HF 0.15&ndash;0.40 Hz</span><b id="aHf">&mdash;</b></div>
+            <div class="tile"><span>LF/HF</span><b id="aLfHf">&mdash;</b></div>
           </div>
           <p class="callout">Engineering / evaluation display only. Signal quality and HRV are quality-control aids — not arrhythmia classification and not a medical diagnosis.</p>
+          <details class="explain">
+            <summary>How this works<b>4</b></summary>
+            <p class="note"><b>Which beats count.</b> HRV is defined on <b>NN</b> intervals &mdash; normal-to-normal &mdash;
+              not on every RR the detector emits. An ectopic beat or a missed one puts a spike in the series that is
+              real in the data and meaningless as heart-rate variability, and RMSSD in particular is dominated by
+              exactly those adjacent differences. Intervals outside 300&ndash;2000 ms, or differing from the running
+              median by more than 20 %, are dropped and counted, so <b>Beats accepted</b> says how much of the record
+              survived rather than hiding the rejection.</p>
+            <p class="note"><b>Poincar&eacute;.</b> Each RR plotted against the next. The cloud&rsquo;s width across the
+              identity line is <b>SD1</b> = short-term variability, algebraically RMSSD/&radic;2; its length along the
+              line is <b>SD2</b>, the long-term spread. A cigar shape is normal sinus rhythm; a fan opening to the
+              right is increasing variability with slower rate; islands off the diagonal are ectopy. It shows the
+              shape of the variability that the three time-domain numbers can only average.</p>
+            <p class="note"><b>Why Lomb&ndash;Scargle and not an FFT.</b> RR intervals are not evenly sampled &mdash;
+              each one is a different length, which is the whole point of the measurement. The usual shortcut is to
+              interpolate onto a 4 Hz grid and FFT that, and the interpolation invents high-frequency content that was
+              never measured, biasing HF power upward exactly where the respiratory peak is read. The
+              <b>Lomb&ndash;Scargle periodogram</b> is a least-squares fit of sinusoids to unevenly spaced samples and
+              needs no interpolation at all, so nothing is invented before the number is taken.</p>
+            <p class="note"><b>Reading the bands.</b> HF (0.15&ndash;0.40 Hz) tracks respiratory sinus arrhythmia and is
+              largely parasympathetic; LF (0.04&ndash;0.15 Hz) mixes both branches with baroreflex activity; VLF needs
+              far longer records than a short strip to mean anything. LF/HF is often called sympathovagal balance and
+              that reading is disputed &mdash; report it, do not lean on it. Per the Task Force standard, HF wants at
+              least 1 minute, LF at least 2, and VLF a full 5; the panel says which bands the strip is actually long
+              enough for instead of printing four numbers as if they were equally earned.</p>
+          </details>
         </section>
       </div>
     </div>
@@ -1537,12 +1647,15 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <p class="status-line warn" id="batSurfaceNote" hidden></p>
         <p class="status-line" id="batCalPreview">Measure the pack with a meter while it is running on battery, type the volts, press APPLY.</p>
-        <p class="callout">The percentage is a voltage lookup on a LiPo discharge curve, not a coulomb counter.
-          Its accuracy is set by the SAADC internal reference (±2–3% untrimmed) and two 1% divider resistors —
-          together up to ±150 mV at 3.7 V, which is 20 points of charge in the flat middle of the curve. Measuring
-          the pack once with a meter and applying it here is the only thing that fixes that; the factor is stored
-          in this browser and re-sent whenever the board connects. While charging, the terminal voltage is lifted
-          by the charge current and the percentage is not trustworthy — the tag says so.</p>
+        <details class="explain">
+          <summary>How this works<b>1</b></summary>
+          <p class="callout">The percentage is a voltage lookup on a LiPo discharge curve, not a coulomb counter.
+            Its accuracy is set by the SAADC internal reference (±2–3% untrimmed) and two 1% divider resistors —
+            together up to ±150 mV at 3.7 V, which is 20 points of charge in the flat middle of the curve. Measuring
+            the pack once with a meter and applying it here is the only thing that fixes that; the factor is stored
+            in this browser and re-sent whenever the board connects. While charging, the terminal voltage is lifted
+            by the charge current and the percentage is not trustworthy — the tag says so.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1562,25 +1675,28 @@ body:has(.vital-tag.alert) .app-header{
             <button class="btn sm" onclick="clearPackRun()">CLEAR BOARD LOG</button>
           </div>
         </div>
-        <p class="note">You are right about the shape: a LiPo does not fall evenly. It drops through
-          4.20&ndash;4.10 V in minutes, then spends most of its life crossing 3.95&ndash;3.75 V, then falls off a
-          cliff below 3.5 V. That is why percent cannot be a straight line from volts, and why this console carries
-          a 21-point table instead of a formula.</p>
-        <p class="note">But that table is a <b>generic</b> LiPo curve &mdash; a fair average of cells in general, and
-          not this cell. This pack has already proved it is not average: the one labelled 300 mAh held 55.
-          <b>The fix is to measure this pack&rsquo;s own curve</b>, which is what a fuel-gauge vendor does and what
-          the board can now do for itself.</p>
-        <p class="note"><b>Method.</b> Discharge from full to cutoff at the operating current, logging volts against
-          time. The load is constant, so charge consumed is proportional to elapsed time and state of charge at
-          sample <i>i</i> of <i>n</i> is <b>1 &minus; i/(n&minus;1)</b>. Invert that and you have volts &rarr; percent
-          for this pack under this load, with no datasheet in it. Noise is removed by isotonic regression rather than
-          a running minimum, which would force the curve monotone by biasing every point down into the noise.</p>
-        <p class="note">The log lives <b>on the board</b> &mdash; one point every 6 minutes for 48 hours &mdash;
-          because a 47-hour characterisation cannot depend on a browser tab surviving two days. Charging clears it:
-          the derivation is only true across one uninterrupted discharge, so a run with a seam in it is thrown away
-          rather than quietly averaged. A run that did not start above 4.150 V and end below 3.450 V is marked
-          <b>PARTIAL</b> &mdash; export works, ADOPT refuses, because i/(n&minus;1) would then be a fraction of the
-          logged span rather than of the pack.</p>
+        <details class="explain">
+          <summary>How this works<b>4</b></summary>
+          <p class="note">You are right about the shape: a LiPo does not fall evenly. It drops through
+            4.20&ndash;4.10 V in minutes, then spends most of its life crossing 3.95&ndash;3.75 V, then falls off a
+            cliff below 3.5 V. That is why percent cannot be a straight line from volts, and why this console carries
+            a 21-point table instead of a formula.</p>
+          <p class="note">But that table is a <b>generic</b> LiPo curve &mdash; a fair average of cells in general, and
+            not this cell. This pack has already proved it is not average: the one labelled 300 mAh held 55.
+            <b>The fix is to measure this pack&rsquo;s own curve</b>, which is what a fuel-gauge vendor does and what
+            the board can now do for itself.</p>
+          <p class="note"><b>Method.</b> Discharge from full to cutoff at the operating current, logging volts against
+            time. The load is constant, so charge consumed is proportional to elapsed time and state of charge at
+            sample <i>i</i> of <i>n</i> is <b>1 &minus; i/(n&minus;1)</b>. Invert that and you have volts &rarr; percent
+            for this pack under this load, with no datasheet in it. Noise is removed by isotonic regression rather than
+            a running minimum, which would force the curve monotone by biasing every point down into the noise.</p>
+          <p class="note">The log lives <b>on the board</b> &mdash; one point every 6 minutes for 48 hours &mdash;
+            because a 47-hour characterisation cannot depend on a browser tab surviving two days. Charging clears it:
+            the derivation is only true across one uninterrupted discharge, so a run with a seam in it is thrown away
+            rather than quietly averaged. A run that did not start above 4.150 V and end below 3.450 V is marked
+            <b>PARTIAL</b> &mdash; export works, ADOPT refuses, because i/(n&minus;1) would then be a fraction of the
+            logged span rather than of the pack.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1608,33 +1724,36 @@ body:has(.vital-tag.alert) .app-header{
             <button class="btn sm" onclick="exportPowerReport()">EXPORT REPORT</button>
           </div>
         </div>
-        <p class="callout">How fast an answer can arrive is set by physics, not by this button: the error on a fitted
-          slope falls as <span class="mono">T<sup>-1.5</sup></span>, so precision costs time and nothing can buy it back.
-          What GO LIVE does is stop wasting that time &mdash; it samples the ADC as fast as it will go, discards nothing,
-          and shows the convergence while it happens.</p>
-        <p class="note">The headline is fitted over the <b>whole</b> discharge so far, so its interval keeps shrinking
-          for as long as the measurement runs. The four trailing windows answer a different question &mdash; what the
-          board is drawing <i>now</i> &mdash; and stop improving once they are full.</p>
-        <p class="note">A number is always shown, with a 95 % interval, from the sixth reading onwards. &ldquo;Not good
-          enough yet&rdquo; is the verdict badge&rsquo;s job, not a reason to show a blank: <b>4 &plusmn; 12 mA</b> after
-          five minutes is a true statement that tells you to keep waiting, and a blank tile tells you nothing at all.</p>
-        <p class="note">Every assumption behind the number is listed with what it actually measured, so each one can be
-          answered rather than assumed. <b>EXPORT REPORT</b> writes the method, the result, the instrument settings, all
-          eight checks and every raw reading to a text file &mdash; a measurement nobody can reconstruct is an anecdote.</p>
-        <p class="note"><b>On this pack</b> is percent divided by percent-per-hour, so the capacity cancels: it stays
-          right even if the mAh on the label is a lie. <b>Full charge would last</b> and the milliamp figure do not
-          &mdash; they are only as good as the number in the Pack capacity box.</p>
-        <p class="note">A cell straight off the charger falls on its own for a while, which reads as current that is
-          not there. The board reports how long ago the charge current stopped, so this works even when the console was
-          opened after the unplug &mdash; the tile says PACK IS RELAXING and counts the wait down.</p>
-        <p class="note">Independently of that, every window is split in half and the two slopes compared. A constant
-          load discharges a cell along a <b>straight line in charge</b>; relaxation is steep at first and flattens. When
-          the early half is significantly faster the tile reads <b>NOT A LOAD</b> and refuses to call it settled &mdash;
-          which matters, because while a pack relaxes every window measures the same wrong thing and they agree with
-          each other beautifully. Two windows agreeing is necessary, not sufficient.</p>
-        <p class="note">Above about 4.06 V the discharge curve is at its steepest and least like any particular cell, so
-          a few millivolts of error becomes a large error in percent. The reading is tinted and labelled
-          <b>top of curve</b> there. Measure in the flat middle (3.7&ndash;3.9 V) for the number you act on.</p>
+        <details class="explain">
+          <summary>How this works<b>8</b></summary>
+          <p class="callout">How fast an answer can arrive is set by physics, not by this button: the error on a fitted
+            slope falls as <span class="mono">T<sup>-1.5</sup></span>, so precision costs time and nothing can buy it back.
+            What GO LIVE does is stop wasting that time &mdash; it samples the ADC as fast as it will go, discards nothing,
+            and shows the convergence while it happens.</p>
+          <p class="note">The headline is fitted over the <b>whole</b> discharge so far, so its interval keeps shrinking
+            for as long as the measurement runs. The four trailing windows answer a different question &mdash; what the
+            board is drawing <i>now</i> &mdash; and stop improving once they are full.</p>
+          <p class="note">A number is always shown, with a 95 % interval, from the sixth reading onwards. &ldquo;Not good
+            enough yet&rdquo; is the verdict badge&rsquo;s job, not a reason to show a blank: <b>4 &plusmn; 12 mA</b> after
+            five minutes is a true statement that tells you to keep waiting, and a blank tile tells you nothing at all.</p>
+          <p class="note">Every assumption behind the number is listed with what it actually measured, so each one can be
+            answered rather than assumed. <b>EXPORT REPORT</b> writes the method, the result, the instrument settings, all
+            eight checks and every raw reading to a text file &mdash; a measurement nobody can reconstruct is an anecdote.</p>
+          <p class="note"><b>On this pack</b> is percent divided by percent-per-hour, so the capacity cancels: it stays
+            right even if the mAh on the label is a lie. <b>Full charge would last</b> and the milliamp figure do not
+            &mdash; they are only as good as the number in the Pack capacity box.</p>
+          <p class="note">A cell straight off the charger falls on its own for a while, which reads as current that is
+            not there. The board reports how long ago the charge current stopped, so this works even when the console was
+            opened after the unplug &mdash; the tile says PACK IS RELAXING and counts the wait down.</p>
+          <p class="note">Independently of that, every window is split in half and the two slopes compared. A constant
+            load discharges a cell along a <b>straight line in charge</b>; relaxation is steep at first and flattens. When
+            the early half is significantly faster the tile reads <b>NOT A LOAD</b> and refuses to call it settled &mdash;
+            which matters, because while a pack relaxes every window measures the same wrong thing and they agree with
+            each other beautifully. Two windows agreeing is necessary, not sufficient.</p>
+          <p class="note">Above about 4.06 V the discharge curve is at its steepest and least like any particular cell, so
+            a few millivolts of error becomes a large error in percent. The reading is tinted and labelled
+            <b>top of curve</b> there. Measure in the flat middle (3.7&ndash;3.9 V) for the number you act on.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1656,17 +1775,20 @@ body:has(.vital-tag.alert) .app-header{
         </table>
         <p class="status-line" id="abCompare">Two completed segments are needed before a difference means anything.</p>
         <p class="status-line" id="abStatus">Idle.</p>
-        <p class="callout"><b>This is the number to trust.</b> An absolute draw carries every systematic error at once
-          &mdash; a generic discharge curve that is not your cell&rsquo;s, a pack capacity that is whatever the label
-          claimed, and a divider that may never have been calibrated. Between them that is easily 30&ndash;50 %, and it
-          is not noise: it is the ruler being the wrong length, so no amount of averaging touches it.</p>
-        <p class="note">A <b>difference</b> cancels nearly all of it. Run a segment, change exactly one thing, run
-          another, and subtract &mdash; the curve, the capacity and the divider are common to both and divide out. That
-          is how to answer &ldquo;what does the microSD module actually cost me&rdquo; to within a fraction of a
-          milliamp, using a board with no shunt on it.</p>
-        <p class="note">Both segments must sit in a similar part of the curve or the errors stop being common; the
-          comparison line checks the voltage bands overlap and says so when they do not. Run on battery, off the
-          charger, and do not touch the board while a segment is running.</p>
+        <details class="explain">
+          <summary>How this works<b>3</b></summary>
+          <p class="callout"><b>This is the number to trust.</b> An absolute draw carries every systematic error at once
+            &mdash; a generic discharge curve that is not your cell&rsquo;s, a pack capacity that is whatever the label
+            claimed, and a divider that may never have been calibrated. Between them that is easily 30&ndash;50 %, and it
+            is not noise: it is the ruler being the wrong length, so no amount of averaging touches it.</p>
+          <p class="note">A <b>difference</b> cancels nearly all of it. Run a segment, change exactly one thing, run
+            another, and subtract &mdash; the curve, the capacity and the divider are common to both and divide out. That
+            is how to answer &ldquo;what does the microSD module actually cost me&rdquo; to within a fraction of a
+            milliamp, using a board with no shunt on it.</p>
+          <p class="note">Both segments must sit in a similar part of the curve or the errors stop being common; the
+            comparison line checks the voltage bands overlap and says so when they do not. Run on battery, off the
+            charger, and do not touch the board while a segment is running.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1697,23 +1819,26 @@ body:has(.vital-tag.alert) .app-header{
           </div>
         </div>
         <p class="status-line" id="pwrModelNote">Every line is a duty cycle the board reported multiplied by a published current.</p>
-        <p class="callout">This table is a <b>model</b>, not a measurement, and it exists because the measured figure
-          takes minutes to move and so cannot answer &ldquo;what did that setting just cost me&rdquo;. This one answers
-          instantly and is wrong by whatever the coefficients are wrong by. Read the two together: <b>Agreement</b> is
-          the only check either of them gets.</p>
-        <p class="note"><b>*</b> This row is the one coefficient that cannot be looked up, and it is almost certainly
-          the largest single consumer on the board. A bare microSD socket idles at 0.2&ndash;1 mA. A <b>breakout
-          module</b> is a different object: the common blue ones carry an <b>AMS1117-3.3 regulator, whose quiescent
-          current alone is 5&ndash;11 mA</b>, usually a 74LVC125 level shifter, and very often a power LED at another
-          2&ndash;5 mA. Twelve milliamps doing absolutely nothing is an ordinary figure for one, and it does not appear
-          in any duty cycle the firmware can measure because none of it is switching.</p>
-        <p class="note"><b>CALIBRATE</b> solves this row as the residual once the measured figure has converged, which
-          also means it silently absorbs every error in the other rows and in the discharge curve. Use the A/B card
-          above to measure it properly instead: run one segment with the module connected and one with it unplugged.
-          The difference is the module, and it owes nothing to the curve.</p>
-        <p class="note"><b>&dagger;</b> The radio row is the roughest: it counts on-air bytes and ignores the fixed cost
-          of every connection event, which at a short interval can exceed the payload cost outright. If the Link tab
-          reads 1M and DLE 27, that row is also several times larger than it needs to be.</p>
+        <details class="explain">
+          <summary>How this works<b>4</b></summary>
+          <p class="callout">This table is a <b>model</b>, not a measurement, and it exists because the measured figure
+            takes minutes to move and so cannot answer &ldquo;what did that setting just cost me&rdquo;. This one answers
+            instantly and is wrong by whatever the coefficients are wrong by. Read the two together: <b>Agreement</b> is
+            the only check either of them gets.</p>
+          <p class="note"><b>*</b> This row is the one coefficient that cannot be looked up, and it is almost certainly
+            the largest single consumer on the board. A bare microSD socket idles at 0.2&ndash;1 mA. A <b>breakout
+            module</b> is a different object: the common blue ones carry an <b>AMS1117-3.3 regulator, whose quiescent
+            current alone is 5&ndash;11 mA</b>, usually a 74LVC125 level shifter, and very often a power LED at another
+            2&ndash;5 mA. Twelve milliamps doing absolutely nothing is an ordinary figure for one, and it does not appear
+            in any duty cycle the firmware can measure because none of it is switching.</p>
+          <p class="note"><b>CALIBRATE</b> solves this row as the residual once the measured figure has converged, which
+            also means it silently absorbs every error in the other rows and in the discharge curve. Use the A/B card
+            above to measure it properly instead: run one segment with the module connected and one with it unplugged.
+            The difference is the module, and it owes nothing to the curve.</p>
+          <p class="note"><b>&dagger;</b> The radio row is the roughest: it counts on-air bytes and ignores the fixed cost
+            of every connection event, which at a short interval can exceed the payload cost outright. If the Link tab
+            reads 1M and DLE 27, that row is also several times larger than it needs to be.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1754,22 +1879,25 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>IMU / microphone</span><b id="pwrSensors">—</b></div>
           <div class="tile"><span>LED draw</span><b id="pwrLedDraw">—</b></div>
         </div>
-        <p class="note">Green is time the core spent in <span class="mono">sd_app_evt_wait()</span> instead of spinning.
-          Turn the toggle off and watch it fall &mdash; that difference is the saving, measured on this board rather
-          than estimated. Only the acquisition ISR is instrumented, so while a BLE link is up this is an upper bound:
-          the SoftDevice's own radio interrupts also run while the core is nominally asleep.</p>
-        <p class="note"><b>Wake-ups</b> is how often the core left sleep; <b>full loop passes</b> is how often that
-          wake actually ran the whole loop body. The gap between them is the idle slice doing its job. At 500 SPS a
-          37-sample block completes only 13.5 times a second, so 36 wakes out of every 37 have nothing to do and
-          should cost one comparison rather than one loop.</p>
-        <p class="note"><b>Acquisition load</b> is the ADS1292R ISR, and it is set almost entirely by the ADS SCLK:
-          nine bytes at 250 kHz takes 288&nbsp;&micro;s per conversion, which is 14% of the core at 500 SPS. Run the
-          link test on the Registers tab and raise the clock to whatever this wiring proves it will hold &mdash; it
-          is the largest remaining CPU cost on the board.</p>
-        <p class="callout">The buck regulator is the single biggest saving on this list &mdash; roughly a third of the
-          core and radio current at 3.7&ndash;4.2&nbsp;V. It is armed rather than asserted: if the board does not
-          survive four seconds with it engaged, the next boot refuses to try again and this tile reads LOCKED OUT.
-          The board stays reachable either way by double-tapping RESET into the bootloader.</p>
+        <details class="explain">
+          <summary>How this works<b>4</b></summary>
+          <p class="note">Green is time the core spent in <span class="mono">sd_app_evt_wait()</span> instead of spinning.
+            Turn the toggle off and watch it fall &mdash; that difference is the saving, measured on this board rather
+            than estimated. Only the acquisition ISR is instrumented, so while a BLE link is up this is an upper bound:
+            the SoftDevice's own radio interrupts also run while the core is nominally asleep.</p>
+          <p class="note"><b>Wake-ups</b> is how often the core left sleep; <b>full loop passes</b> is how often that
+            wake actually ran the whole loop body. The gap between them is the idle slice doing its job. At 500 SPS a
+            37-sample block completes only 13.5 times a second, so 36 wakes out of every 37 have nothing to do and
+            should cost one comparison rather than one loop.</p>
+          <p class="note"><b>Acquisition load</b> is the ADS1292R ISR, and it is set almost entirely by the ADS SCLK:
+            nine bytes at 250 kHz takes 288&nbsp;&micro;s per conversion, which is 14% of the core at 500 SPS. Run the
+            link test on the Registers tab and raise the clock to whatever this wiring proves it will hold &mdash; it
+            is the largest remaining CPU cost on the board.</p>
+          <p class="callout">The buck regulator is the single biggest saving on this list &mdash; roughly a third of the
+            core and radio current at 3.7&ndash;4.2&nbsp;V. It is armed rather than asserted: if the board does not
+            survive four seconds with it engaged, the next boot refuses to try again and this tile reads LOCKED OUT.
+            The board stays reachable either way by double-tapping RESET into the bootloader.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1794,11 +1922,14 @@ body:has(.vital-tag.alert) .app-header{
               <option value="25000000">25 MHz</option>
             </select></label>
         </div>
-        <p class="note">Stop recording before changing the clock. The firmware falls back automatically
-          if the card refuses it, and reports the rate it settled on.</p>
-        <p class="note">Worst-case burst latency matters more than the average: the acquisition ring holds about
-          2.4 s at 1000 SPS, so a card that stalls longer than that drops blocks. Ring drops above zero means the
-          card, not the code, is the limit.</p>
+        <details class="explain">
+          <summary>How this works<b>2</b></summary>
+          <p class="note">Stop recording before changing the clock. The firmware falls back automatically
+            if the card refuses it, and reports the rate it settled on.</p>
+          <p class="note">Worst-case burst latency matters more than the average: the acquisition ring holds about
+            2.4 s at 1000 SPS, so a card that stalls longer than that drops blocks. Ring drops above zero means the
+            card, not the code, is the limit.</p>
+        </details>
       </div>
 
       <div class="card">
@@ -1824,10 +1955,13 @@ body:has(.vital-tag.alert) .app-header{
               <option value="8">+8 dBm</option>
             </select></label>
         </div>
-        <p class="note" id="pwrTxpHint">—</p>
-        <p class="note">A 139-byte notification costs far more airtime on 1M PHY with a 27-byte data length than on
-          2M with 251 — the frame gets fragmented. If PHY reads 1M and DLE reads 27, the radio is doing several times
-          the work it needs to for the same samples.</p>
+        <details class="explain">
+          <summary>How this works<b>2</b></summary>
+          <p class="note" id="pwrTxpHint">—</p>
+          <p class="note">A 139-byte notification costs far more airtime on 1M PHY with a 27-byte data length than on
+            2M with 251 — the frame gets fragmented. If PHY reads 1M and DLE reads 27, the radio is doing several times
+            the work it needs to for the same samples.</p>
+        </details>
       </div>
     </div>
 
@@ -1873,21 +2007,24 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <p class="status-line" id="ledStatusLine">Connect to read the board&rsquo;s LED policy.</p>
 
-        <p class="callout">The XIAO&rsquo;s RGB LED is common-anode through about 1 k&Omega; a leg, so a lit
-          channel costs roughly 1&ndash;2 mA and white costs three times that. That is the same order as
-          everything else on the board put together once the core is allowed to sleep, which is why this is
-          a power control and not a cosmetic one. On a 300 mAh pack a permanently lit LED is a double-digit
-          share of the budget.</p>
-        <p class="note"><b>ALL OFF</b> is exactly that &mdash; no state colour, no recording blink, nothing.
-          <b>HEARTBEAT</b> is the default: dark except for a short flash of the state colour, red while
-          recording, so the board still proves it is alive for well under a tenth of a milliamp on average.
-          <b>STEADY STATUS</b> is the original V2.0 behaviour.</p>
-        <p class="note">Brightness between 1 and 99 % binds the three LED pins to a PWM block, and that block
-          holds HFCLK on for as long as it runs &mdash; a few hundred microamps whether or not the LED is
-          bright. 0 % and 100 % are pure GPIO and cost nothing to hold. If the goal is battery life, dimming
-          is the wrong lever and OFF or HEARTBEAT is the right one; the tile above says which mode is live.</p>
-        <p class="note">A colour hold releases itself after 10 seconds, so a board can never be left with
-          its LED stuck on by a console that was closed mid-test.</p>
+        <details class="explain">
+          <summary>How this works<b>4</b></summary>
+          <p class="callout">The XIAO&rsquo;s RGB LED is common-anode through about 1 k&Omega; a leg, so a lit
+            channel costs roughly 1&ndash;2 mA and white costs three times that. That is the same order as
+            everything else on the board put together once the core is allowed to sleep, which is why this is
+            a power control and not a cosmetic one. On a 300 mAh pack a permanently lit LED is a double-digit
+            share of the budget.</p>
+          <p class="note"><b>ALL OFF</b> is exactly that &mdash; no state colour, no recording blink, nothing.
+            <b>HEARTBEAT</b> is the default: dark except for a short flash of the state colour, red while
+            recording, so the board still proves it is alive for well under a tenth of a milliamp on average.
+            <b>STEADY STATUS</b> is the original V2.0 behaviour.</p>
+          <p class="note">Brightness between 1 and 99 % binds the three LED pins to a PWM block, and that block
+            holds HFCLK on for as long as it runs &mdash; a few hundred microamps whether or not the LED is
+            bright. 0 % and 100 % are pure GPIO and cost nothing to hold. If the goal is battery life, dimming
+            is the wrong lever and OFF or HEARTBEAT is the right one; the tile above says which mode is live.</p>
+          <p class="note">A colour hold releases itself after 10 seconds, so a board can never be left with
+            its LED stuck on by a console that was closed mid-test.</p>
+        </details>
       </div>
     </div>
 
@@ -1923,29 +2060,32 @@ body:has(.vital-tag.alert) .app-header{
             <div class="tile"><span>Write duration</span><b id="sdWriteMs">&mdash;</b></div>
             <div class="tile"><span>Card shuffling</span><b id="sdShuffle">&mdash;</b></div>
           </div>
-          <p class="note" style="margin-top:8px">Neither number is reported by the board: <code>SD:BYTES</code> counts
-            committed <i>plus</i> buffered, so it climbs smoothly and a flush leaves no mark in it, while
-            <code>PWR:SDOPS</code> counts the flushes. Every flush empties the buffer &mdash; burst full, partial-flush
-            timer and the 30 s FAT sync all go through the same call &mdash; so the fill is the bytes accumulated since
-            <code>SDOPS</code> last moved, and the moment it moved is the write. Both arrive once a second, so a fresh
-            write can be up to a second old before it shows here.</p>
-          <p class="note">The trace above is one bar per write, height = how long the card was busy. It is the
-            measurable half of the current-vs-time capture a sense resistor and a scope would give: at a fixed supply
-            and a fixed SPI clock the card&rsquo;s write current is roughly constant, so <b>busy time is proportional
-            to the charge that write cost</b>. What it cannot show is the height of the current spike itself, because
-            this board has no sense resistor &mdash; it infers current from pack voltage over hours, which has no time
-            resolution below tens of minutes.</p>
-          <p class="note">What the shape tells you is the same thing a scope would: a card that writes 32 KiB in a
-            steady 16&ndash;21 ms is doing what it is told, and one that periodically stops for 70 ms or more is doing
-            internal block shuffling that you are paying for in battery. <b>Card shuffling</b> is the worst write
-            divided by the median &mdash; the single number that separated the Home-Mall card from the Acer one.
-            Durations come from <code>SDMS</code>, which the firmware accumulates in whole milliseconds, so each write
-            is rounded down by up to 1 ms.</p>
-          <p class="note"><b>The red LED is not this.</b> It is a 25 ms heartbeat on a fixed 4 s timer that turns red
-            while recording, so on a Holter run at ~7.5 s per write the two drift in and out of step and mean different
-            things: the LED says <i>still running</i>, this card says <i>the card just woke up</i>. Making the LED
-            flash on the flush instead is a firmware change, and a worthwhile one &mdash; it would put the cadence on
-            the strap where you can see it without a phone.</p>
+          <details class="explain">
+            <summary>How this works<b>4</b></summary>
+            <p class="note" style="margin-top:8px">Neither number is reported by the board: <code>SD:BYTES</code> counts
+              committed <i>plus</i> buffered, so it climbs smoothly and a flush leaves no mark in it, while
+              <code>PWR:SDOPS</code> counts the flushes. Every flush empties the buffer &mdash; burst full, partial-flush
+              timer and the 30 s FAT sync all go through the same call &mdash; so the fill is the bytes accumulated since
+              <code>SDOPS</code> last moved, and the moment it moved is the write. Both arrive once a second, so a fresh
+              write can be up to a second old before it shows here.</p>
+            <p class="note">The trace above is one bar per write, height = how long the card was busy. It is the
+              measurable half of the current-vs-time capture a sense resistor and a scope would give: at a fixed supply
+              and a fixed SPI clock the card&rsquo;s write current is roughly constant, so <b>busy time is proportional
+              to the charge that write cost</b>. What it cannot show is the height of the current spike itself, because
+              this board has no sense resistor &mdash; it infers current from pack voltage over hours, which has no time
+              resolution below tens of minutes.</p>
+            <p class="note">What the shape tells you is the same thing a scope would: a card that writes 32 KiB in a
+              steady 16&ndash;21 ms is doing what it is told, and one that periodically stops for 70 ms or more is doing
+              internal block shuffling that you are paying for in battery. <b>Card shuffling</b> is the worst write
+              divided by the median &mdash; the single number that separated the Home-Mall card from the Acer one.
+              Durations come from <code>SDMS</code>, which the firmware accumulates in whole milliseconds, so each write
+              is rounded down by up to 1 ms.</p>
+            <p class="note"><b>The red LED is not this.</b> It is a 25 ms heartbeat on a fixed 4 s timer that turns red
+              while recording, so on a Holter run at ~7.5 s per write the two drift in and out of step and mean different
+              things: the LED says <i>still running</i>, this card says <i>the card just woke up</i>. Making the LED
+              flash on the flush instead is a firmware change, and a worthwhile one &mdash; it would put the cadence on
+              the strap where you can see it without a phone.</p>
+          </details>
         </div>
 
         <div class="card">
@@ -1988,11 +2128,14 @@ body:has(.vital-tag.alert) .app-header{
             <div class="ctl span2">
               <span>Holter &mdash; unattended</span>
               <button class="btn record" id="btnHolterRec" onclick="triggerHolterRecord()">● HOLTER REC</button>
-              <p class="note" style="margin-top:4px">32 KiB bursts, 20 s flush, 16 ms idle slice &mdash; four times
-                fewer card wake-ups, which is where an unattended run&rsquo;s battery actually goes. The price is
-                stated rather than hidden: up to <b>9.5 s of data</b> is in RAM at any moment, so a dead battery loses
-                that much. The cadence is applied when recording starts and reverted when it stops, so a Holter run
-                cannot change what a later bench run does.</p>
+              <details class="explain">
+                <summary>How this works<b>1</b></summary>
+                <p class="note" style="margin-top:4px">32 KiB bursts, 20 s flush, 16 ms idle slice &mdash; four times
+                  fewer card wake-ups, which is where an unattended run&rsquo;s battery actually goes. The price is
+                  stated rather than hidden: up to <b>9.5 s of data</b> is in RAM at any moment, so a dead battery loses
+                  that much. The cadence is applied when recording starts and reverted when it stops, so a Holter run
+                  cannot change what a later bench run does.</p>
+              </details>
             </div>
           </div>
         </div>
@@ -2003,7 +2146,10 @@ body:has(.vital-tag.alert) .app-header{
             <thead><tr><th>File</th><th>Size</th><th>State</th><th></th></tr></thead>
             <tbody id="sessionFileBody"><tr><td class="empty" colspan="4">No list loaded.</td></tr></tbody>
           </table>
-          <p class="callout"><b>.ecg</b> stores raw 24-bit samples in a recoverable container: 512-byte header, 256-byte CRC32 data blocks, 64-byte footer. Writes are coalesced into 8 KiB bursts with a metadata sync every 30 s, so the card wakes far less often without risking acquisition.</p>
+          <details class="explain">
+            <summary>How this works<b>1</b></summary>
+            <p class="callout"><b>.ecg</b> stores raw 24-bit samples in a recoverable container: 512-byte header, 256-byte CRC32 data blocks, 64-byte footer. Writes are coalesced into 8 KiB bursts with a metadata sync every 30 s, so the card wakes far less often without risking acquisition.</p>
+          </details>
         </div>
       </div>
     </div>
@@ -2058,16 +2204,19 @@ body:has(.vital-tag.alert) .app-header{
             <thead><tr><th>SCLK</th><th>Errors / trials</th><th>Frame</th><th>Verdict</th></tr></thead>
             <tbody id="spiSweepBody"><tr><td class="empty" colspan="4">No sweep run yet.</td></tr></tbody>
           </table>
-          <p class="callout" id="spiAdvice">The nRF52 SPIM only generates 125 k / 250 k / 500 k / 1 M / 2 M / 4 M / 8 MHz. A requested 200 kHz is physically 250 kHz. The sweep writes and reads back all twelve registers at each clock and reports the highest error-free setting for <b>this</b> wiring.</p>
-          <p class="note">This is also the largest CPU cost on the board, and therefore a battery setting as much as a
-            signal one. One nine-byte conversion frame at 250 kHz occupies 288&nbsp;&micro;s, so at 500 SPS the ADS
-            interrupt alone owns 14% of the core and the core cannot sleep through any of it. At 1&nbsp;MHz the same
-            frame is 72&nbsp;&micro;s and that figure falls to 3.6%. Run the link test, apply what it recommends, and
-            watch <b>core asleep</b> on the Power tab move.</p>
-          <p class="note">The firmware keeps the clock in RAM only &mdash; it deliberately writes nothing to flash for
-            a number you may retune several times in a sitting &mdash; so it boots at the safe 250 kHz every time.
-            Applying a clock here stores it in this browser and re-sends it on every connect, the same way the battery
-            divider calibration works. FORGET stops that.</p>
+          <details class="explain">
+            <summary>How this works<b>3</b></summary>
+            <p class="callout" id="spiAdvice">The nRF52 SPIM only generates 125 k / 250 k / 500 k / 1 M / 2 M / 4 M / 8 MHz. A requested 200 kHz is physically 250 kHz. The sweep writes and reads back all twelve registers at each clock and reports the highest error-free setting for <b>this</b> wiring.</p>
+            <p class="note">This is also the largest CPU cost on the board, and therefore a battery setting as much as a
+              signal one. One nine-byte conversion frame at 250 kHz occupies 288&nbsp;&micro;s, so at 500 SPS the ADS
+              interrupt alone owns 14% of the core and the core cannot sleep through any of it. At 1&nbsp;MHz the same
+              frame is 72&nbsp;&micro;s and that figure falls to 3.6%. Run the link test, apply what it recommends, and
+              watch <b>core asleep</b> on the Power tab move.</p>
+            <p class="note">The firmware keeps the clock in RAM only &mdash; it deliberately writes nothing to flash for
+              a number you may retune several times in a sitting &mdash; so it boots at the safe 250 kHz every time.
+              Applying a clock here stores it in this browser and re-sends it on every connect, the same way the battery
+              divider calibration works. FORGET stops that.</p>
+          </details>
         </div>
 
         <div class="card">
@@ -2082,7 +2231,10 @@ body:has(.vital-tag.alert) .app-header{
             <div class="tile"><span>Columns / frame</span><b id="rColumns">—</b></div>
             <div class="tile"><span>Full repaints /s</span><b id="rFullRedraw">—</b></div>
           </div>
-          <p class="callout" id="rAdvice">requestAnimationFrame is locked to the monitor's refresh rate. 120 FPS is only reachable on a 120 Hz (or faster) display with the browser window on that monitor; on a 60 Hz panel the ceiling is 60 and the goal becomes zero dropped frames instead.</p>
+          <details class="explain">
+            <summary>How this works<b>1</b></summary>
+            <p class="callout" id="rAdvice">requestAnimationFrame is locked to the monitor's refresh rate. 120 FPS is only reachable on a 120 Hz (or faster) display with the browser window on that monitor; on a 60 Hz panel the ceiling is 60 and the goal becomes zero dropped frames instead.</p>
+          </details>
         </div>
 
         <div class="card">
@@ -5896,6 +6048,56 @@ function toggleSolo(cardId) {
   // Layout has changed under the canvases; re-measure before the next paint.
   requestAnimationFrame(() => { CHARTS.forEach(c => c.resize()); applySweepSettings(); });
 }
+/* Which traces are on screen.
+
+   The renderer already skips a chart whose IntersectionObserver says it is
+   off screen, so hiding one costs nothing per frame. What it does not do on
+   its own is repaint a chart that comes BACK - the sweep only ever draws the
+   band at the head, so a canvas that was hidden for a minute would return
+   holding a minute-old picture with a fresh sliver drawn into it. Switching
+   one on is an explicit statement about visibility, so act on it here rather
+   than waiting for the observer to notice a task or two later. */
+const TRACE_CARDS = ['card1_ch1','card3_ch1','card1_ch2','card3_ch2'];
+let traceOn = { card1_ch1:1, card3_ch1:1, card1_ch2:1, card3_ch2:1 };
+
+// TurboSweepChart is constructed from canvas ids and never learns which
+// card it sits in, so the mapping lives here rather than pretending to
+// search for a property that does not exist.
+const chartForCard = cardId => ({
+  card1_ch1: chart1_ch1, card3_ch1: chart3_ch1,
+  card1_ch2: chart1_ch2, card3_ch2: chart3_ch2,
+}[cardId]);
+
+function applyTraceVisibility() {
+  // Never let the last one go: an empty scope looks exactly like a dead
+  // link, and that confusion has already cost an afternoon here once.
+  if (!TRACE_CARDS.some(id => traceOn[id])) traceOn[TRACE_CARDS[0]] = 1;
+  for (const id of TRACE_CARDS) {
+    const on = !!traceOn[id];
+    $(id)?.classList.toggle('hidden', !on);
+    const chip = $('tg' + id[0].toUpperCase() + id.slice(1));
+    if (chip) { chip.classList.toggle('on', on); chip.setAttribute('aria-pressed', String(on)); }
+    const chart = chartForCard(id);
+    if (chart && on && !chart.onScreen) chart.needsFullRepaint = true;
+    if (chart) chart.onScreen = on;
+  }
+  try { localStorage.setItem('hecg01.traces', JSON.stringify(traceOn)); } catch (e) { /* optional */ }
+  requestAnimationFrame(() => { CHARTS.forEach(c => c.resize()); applySweepSettings(); });
+}
+
+function toggleTrace(cardId) {
+  traceOn[cardId] = traceOn[cardId] ? 0 : 1;
+  applyTraceVisibility();
+}
+
+function loadTraceVisibility() {
+  try {
+    const v = JSON.parse(localStorage.getItem('hecg01.traces') || 'null');
+    if (v && TRACE_CARDS.every(id => id in v)) traceOn = v;
+  } catch (e) { /* optional */ }
+  applyTraceVisibility();
+}
+
 function soloByIndex(index) {
   const ids = ['card1_ch1','card3_ch1','card1_ch2','card3_ch2'];
   if (index >= 0 && index < ids.length) toggleSolo(ids[index]);
@@ -9123,6 +9325,180 @@ function buildAnalysisSignal(snapshot, channel, source) {
   for (let i = 0; i < input.length; i++) output[i] = low.process(notch.process(high.process(input[i])));
   return { raw, values:output, unit:'mV', mode, warmup:Math.min(input.length>>2, Math.round(fs)), label:`ECG ${state.label}` };
 }
+/* ---- HRV: NN filtering, Poincare, Lomb-Scargle ---------------------- *
+
+   Everything below works on RR intervals in milliseconds, in order.  */
+
+/* An RR series is not an NN series.
+
+   Every ectopic beat contributes one short interval and one long one, and a
+   missed detection contributes one interval of roughly double length. Both
+   are real events in the recording and neither is heart-rate variability;
+   RMSSD and SD1, which are built from differences between neighbours, are
+   the metrics most damaged by them - a single missed beat in a five minute
+   strip can double RMSSD on its own.
+
+   The filter is the conventional one: an absolute plausibility window, then
+   a relative test against a running median so that a slow drift in rate is
+   allowed and a sudden jump is not. What matters as much as the filtering
+   is that the count is reported, because "RMSSD 42 ms" from a record where
+   a third of the beats were rejected is a different claim from the same
+   number over a clean one. */
+function nnIntervals(rr) {
+  const kept = [];
+  const W = 5;
+  for (let i = 0; i < rr.length; i++) {
+    const v = rr[i];
+    if (!(v >= 300 && v <= 2000)) continue;
+    const lo = Math.max(0, i - W), hi = Math.min(rr.length, i + W + 1);
+    const near = [];
+    for (let k = lo; k < hi; k++) if (rr[k] >= 300 && rr[k] <= 2000) near.push(rr[k]);
+    if (near.length >= 3) {
+      near.sort((a, b) => a - b);
+      const med = near[near.length >> 1];
+      if (Math.abs(v - med) > 0.2*med) continue;
+    }
+    kept.push(v);
+  }
+  return { nn: kept, rejected: rr.length - kept.length, total: rr.length };
+}
+
+/* Poincare descriptors.
+
+   SD1 and SD2 are the standard deviations along the minor and major axes of
+   the cloud, which is the same thing as rotating the (RR_n, RR_n+1) scatter
+   by 45 degrees and taking the two marginal spreads.
+
+   SD1 is usually quoted as RMSSD/sqrt(2), and that identity is worth keeping
+   as a cross-check between two independent code paths - but it is not exact,
+   and the difference is not rounding. RMSSD is a root-mean-square about
+   ZERO; SD1 is a standard deviation about the MEAN. So
+
+       RMSSD^2 = Var(dRR) + mean(dRR)^2   and   SD1^2 = Var(dRR)/2,
+
+   and the two agree only when mean(dRR) = 0, which is to say when the record
+   ends at the same interval it started at. Over any real strip mean(dRR) is
+   (RR_last - RR_first)/(n-1), so they part company in the seventh decimal.
+   Neither definition is wrong and neither is adjusted to make the check
+   prettier. */
+function poincareMetrics(nn) {
+  if (nn.length < 4) return { sd1:NaN, sd2:NaN, ratio:NaN, points:[] };
+  const a = [], b = [];
+  for (let i = 0; i + 1 < nn.length; i++) { a.push(nn[i]); b.push(nn[i+1]); }
+  const mean = v => v.reduce((x, y) => x + y, 0)/v.length;
+  const ma = mean(a), mb = mean(b);
+  let s1 = 0, s2 = 0;
+  for (let i = 0; i < a.length; i++) {
+    const minor = ((a[i] - ma) - (b[i] - mb))/Math.SQRT2;   // across the identity line
+    const major = ((a[i] - ma) + (b[i] - mb))/Math.SQRT2;   // along it
+    s1 += minor*minor; s2 += major*major;
+  }
+  const sd1 = Math.sqrt(s1/a.length), sd2 = Math.sqrt(s2/a.length);
+  return { sd1, sd2, ratio: sd2 > 0 ? sd1/sd2 : NaN, points: a.map((v, i) => [v, b[i]]) };
+}
+
+/* Lomb-Scargle periodogram.
+
+   The textbook route to HRV frequency bands is to interpolate the tachogram
+   onto an even 4 Hz grid and FFT it. That interpolation is not free: cubic
+   or even linear resampling manufactures spectral content above the mean
+   beat rate that was never in the data, and it lands squarely in the HF
+   band where the respiratory peak is read. Lomb-Scargle fits sinusoids to
+   the samples where they actually are, by least squares, so there is no
+   resampling step to bias.
+
+   Cost is O(n * f) rather than O(n log n). At a few hundred beats and a few
+   hundred frequencies that is well under a millisecond, and this runs on a
+   button press rather than per frame. */
+function lombScargle(t, y, freqs) {
+  const n = t.length;
+  const mean = y.reduce((a, b) => a + b, 0)/n;
+  let varSum = 0;
+  for (let i = 0; i < n; i++) varSum += (y[i] - mean)**2;
+  const variance = varSum/(n - 1);
+  const out = new Float64Array(freqs.length);
+  if (!(variance > 0)) return out;
+  // Returned unnormalised, in ms^2. The classical Lomb normalisation
+  // divides by 2*sigma^2, which is right for asking "is this peak real"
+  // and wrong for a panel that prints ms^2 next to the number: it makes
+  // every band dimensionless and the total always 1. The caller rescales
+  // to Parseval instead, so the bands sum to the variance they came from.
+  for (let k = 0; k < freqs.length; k++) {
+    const w = 2*Math.PI*freqs[k];
+    let ss = 0, cc = 0;
+    for (let i = 0; i < n; i++) { ss += Math.sin(2*w*t[i]); cc += Math.cos(2*w*t[i]); }
+    const tau = Math.atan2(ss, cc)/(2*w);
+    let sc = 0, ssq = 0, cs = 0, csq = 0;
+    for (let i = 0; i < n; i++) {
+      const arg = w*(t[i] - tau);
+      const c = Math.cos(arg), sn = Math.sin(arg), d = y[i] - mean;
+      cs += d*c; csq += c*c;
+      sc += d*sn; ssq += sn*sn;
+    }
+    out[k] = 0.5*((csq > 0 ? cs*cs/csq : 0) + (ssq > 0 ? sc*sc/ssq : 0));
+  }
+  return out;
+}
+
+const HRV_BANDS = [
+  { key:'vlf', lo:0.003, hi:0.04, needSec:300, label:'VLF' },
+  { key:'lf',  lo:0.04,  hi:0.15, needSec:120, label:'LF'  },
+  { key:'hf',  lo:0.15,  hi:0.40, needSec:60,  label:'HF'  },
+];
+
+function hrvSpectrum(nn) {
+  const n = nn.length;
+  if (n < 16) return { ok:false, why:`${n} NN intervals — needs 16` };
+  // Beat times are the cumulative sum: the tachogram's own clock, which is
+  // exactly the uneven sampling Lomb-Scargle exists to handle.
+  const t = new Float64Array(n), y = new Float64Array(n);
+  let acc = 0;
+  for (let i = 0; i < n; i++) { acc += nn[i]/1000; t[i] = acc; y[i] = nn[i]; }
+  const spanSec = t[n-1] - t[0];
+  if (!(spanSec > 20)) return { ok:false, why:`${spanSec.toFixed(0)} s of beats — needs 20 s` };
+
+  const fMin = 0.003, fMax = 0.4, bins = 512;
+  const freqs = new Float64Array(bins);
+  for (let i = 0; i < bins; i++) freqs[i] = fMin + (fMax - fMin)*i/(bins - 1);
+  const power = lombScargle(t, y, freqs);
+  const df = (fMax - fMin)/(bins - 1);
+
+  /* Scale to Parseval, so a band power in ms^2 means what it says.
+
+     A periodogram is only proportional to spectral density; the constant
+     depends on the convention and on how unevenly the samples fall, so it
+     cannot be written down in advance. What CAN be written down is the
+     total: integrated over all frequency the density must equal the
+     variance of the series, and the variance of NN is SDNN^2. Fixing the
+     constant that way makes the three band powers add up to the same
+     number the time-domain tile is already showing, which is both correct
+     and checkable by eye against a tile two rows up. */
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += y[i];
+  mean /= n;
+  let variance = 0;
+  for (let i = 0; i < n; i++) variance += (y[i] - mean)**2;
+  variance /= (n - 1);
+  let integral = 0;
+  for (let i = 0; i < bins; i++) integral += power[i]*df;
+  const k = integral > 0 ? variance/integral : 0;
+  for (let i = 0; i < bins; i++) power[i] *= k;
+
+  const bands = {};
+  for (const b of HRV_BANDS) {
+    let sum = 0;
+    for (let i = 0; i < bins; i++) if (freqs[i] >= b.lo && freqs[i] < b.hi) sum += power[i]*df;
+    // A band shorter than its own settling time is not a small number, it
+    // is an unmeasured one, and the two must not print the same way.
+    bands[b.key] = { power: sum, enough: spanSec >= b.needSec, need: b.needSec };
+  }
+  const total = HRV_BANDS.reduce((a, b) => a + bands[b.key].power, 0);
+  for (const b of HRV_BANDS) bands[b.key].pct = total > 0 ? 100*bands[b.key].power/total : NaN;
+  const lfhf = bands.hf.power > 0 ? bands.lf.power/bands.hf.power : NaN;
+  return { ok:true, freqs, power, df, bands, lfhf, spanSec, n,
+           total, sdnn: Math.sqrt(variance) };
+}
+
 function percentile(sorted, p) {
   if (!sorted.length) return NaN;
   const x = (sorted.length-1)*p, lo = Math.floor(x), hi = Math.ceil(x), f = x-lo;
@@ -9283,14 +9659,191 @@ function computeAnalysis(snapshot) {
   const peak = spectralPeak(spectrum, .05, peakLimit);
   const test = analyzeTestSpectrum(spectrum, signal.mode, snapshot);
   const events = detectSnapshotEvents(snapshot, channel, signal.mode);
+  /* Time-domain HRV stays on the raw RR series it has always used, so the
+     three numbers do not change meaning between firmware versions. The new
+     work runs on NN - the same series with ectopics and dropouts removed -
+     because Poincare and the spectrum are far more sensitive to them, and
+     the two counts are reported side by side so the difference is visible
+     rather than assumed away. */
   const hrv = events.kind === 'ECG' ? hrvMetrics(events.intervals) : { sdnn:NaN, rmssd:NaN, pnn50:NaN, mean:NaN };
+  const nn = events.kind === 'ECG' ? nnIntervals(events.intervals) : { nn:[], rejected:0, total:0 };
+  const poincare = poincareMetrics(nn.nn);
+  const psd = events.kind === 'ECG' ? hrvSpectrum(nn.nn) : { ok:false, why:'RESP channel' };
   const integrity = integrityFractions(signal.raw);
   const quality = qualityScore(signal.mode, integrity, baselineRatio, mainsRatio, events);
   let interpretation = 'Engineering monitor';
   if (events.kind === 'ECG') interpretation = events.intervals.length < 2 ? 'Need longer clean ECG' : quality < 65 ? 'Check electrodes / noise' : 'Stable ECG snapshot';
   else if (events.kind === 'RESP') interpretation = events.intervals.length < 1 ? 'Need longer RESP' : quality < 65 ? 'Check contact / motion' : 'Stable RESP snapshot';
   else if (signal.mode.mux === 5) interpretation = 'Internal test only';
-  return { snapshot, channel, source, signal, stats, spectrum, peak, test, events, hrv, integrity, quality, baselineRatio, mainsRatio, interpretation };
+  return { snapshot, channel, source, signal, stats, spectrum, peak, test, events, hrv, nn, poincare, psd,
+           integrity, quality, baselineRatio, mainsRatio, interpretation };
+}
+
+// Say why a plot is blank. An empty canvas and a broken one look identical.
+function hrvEmpty(g, w, h, why) {
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = 'rgba(146,176,210,.55)';
+  g.font = '600 11px ui-monospace, monospace';
+  g.fillText(why, 14, h/2);
+}
+
+function renderHrvPanel(r) {
+  const pc = r.poincare, psd = r.psd, nn = r.nn;
+  setText('aPoincare', Number.isFinite(pc.sd1)
+    ? `${pc.sd1.toFixed(1)} · ${pc.sd2.toFixed(1)} ms` : 'N/A');
+  setText('aSdRatio', Number.isFinite(pc.ratio) ? pc.ratio.toFixed(3) : 'N/A');
+
+  // How much of the record survived NN filtering, not just how much there
+  // was. A percentage with no denominator is the thing this tile exists to
+  // avoid printing.
+  const usedEl = $('aNnUsed');
+  if (usedEl) {
+    const pct = nn.total > 0 ? 100*nn.nn.length/nn.total : NaN;
+    usedEl.textContent = nn.total > 0
+      ? `${nn.nn.length} / ${nn.total}  (${pct.toFixed(0)} %)` : 'N/A';
+    usedEl.className = !(nn.total > 0) ? '' : pct >= 95 ? 'good' : pct >= 80 ? 'warn' : 'bad';
+    usedEl.title = nn.rejected
+      ? `${nn.rejected} interval(s) rejected as ectopic, missed or implausible. `
+        + 'RMSSD and SD1 are built from differences between neighbours, so they are the '
+        + 'numbers those beats would have distorted most.'
+      : 'Every detected interval passed the NN filter.';
+  }
+  setText('aNnSpan', psd.ok ? `${(psd.spanSec/60).toFixed(1)} min of beats`
+                            : (psd.why || 'N/A'));
+  const spanEl = $('aNnSpan');
+  if (spanEl && psd.ok) {
+    // Total band power and SDNN^2 are the same quantity reached two ways.
+    spanEl.title = `Band powers sum to ${psd.total.toFixed(0)} ms², against SDNN² = `
+                 + `${(psd.sdnn**2).toFixed(0)} ms² over the same beats — the spectrum is `
+                 + 'scaled to Parseval, so the two are the same number by construction and '
+                 + 'any gap is power outside 0.003–0.4 Hz.';
+  }
+
+  for (const b of HRV_BANDS) {
+    const el = $('a' + b.key[0].toUpperCase() + b.key.slice(1));
+    if (!el) continue;
+    if (!psd.ok) { el.textContent = 'N/A'; el.className = ''; el.title = psd.why || ''; continue; }
+    const band = psd.bands[b.key];
+    el.textContent = `${band.power.toFixed(0)} ms²  ·  ${band.pct.toFixed(0)} %`
+                   + (band.enough ? '' : '  ·  too short');
+    el.className = band.enough ? '' : 'warn';
+    el.title = band.enough
+      ? `Absolute power and share of total, over ${(psd.spanSec/60).toFixed(1)} minutes.`
+      : `${b.label} needs at least ${band.need/60} minute(s) of record to settle; `
+        + `this strip is ${(psd.spanSec/60).toFixed(1)}. The number is shown because hiding it `
+        + 'would be worse, but it has not converged.';
+  }
+  const lfhfEl = $('aLfHf');
+  if (lfhfEl) {
+    lfhfEl.textContent = psd.ok && Number.isFinite(psd.lfhf) ? psd.lfhf.toFixed(2) : 'N/A';
+    lfhfEl.title = 'Often called sympathovagal balance. That interpretation is disputed in the '
+                 + 'literature — report it, do not lean on it.';
+  }
+  drawPoincare(r);
+  drawHrvPsd(r);
+}
+
+/* RR against the next RR.
+
+   Drawn with the identity line, because everything the plot says is said
+   relative to it: spread ACROSS it is beat-to-beat variability, spread
+   ALONG it is the slow drift of rate over the record. The SD1/SD2 ellipse
+   is drawn on top so the two tile numbers can be checked by eye against
+   the cloud they claim to describe. */
+function drawPoincare(r) {
+  const surface = prepareAnalysisCanvas('analysisPoincareCanvas'); if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface;
+  const pts = r.poincare.points;
+  if (pts.length < 4) { hrvEmpty(g, w, h, 'Needs at least 5 accepted beats.'); return; }
+  const xs = pts.map(p => p[0]).concat(pts.map(p => p[1]));
+  let lo = Math.min(...xs), hi = Math.max(...xs);
+  const pad = Math.max(20, (hi - lo)*0.12); lo -= pad; hi += pad;
+  const L = 44, B = 26, T = 10, R = 10;
+  const X = v => L + (v - lo)/(hi - lo)*(w - L - R);
+  const Y = v => h - B - (v - lo)/(hi - lo)*(h - T - B);
+
+  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = lo + (hi - lo)*i/ticks;
+    const y = Math.round(Y(v))+0.5, x = Math.round(X(v))+0.5;
+    g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
+    g.beginPath(); g.moveTo(x, T); g.lineTo(x, h-B); g.stroke();
+    g.fillText(v.toFixed(0), 4, y+3);
+    g.fillText(v.toFixed(0), x-12, h-8);
+  }
+  g.strokeStyle = 'rgba(146,176,210,.4)'; g.setLineDash([4,3]);
+  g.beginPath(); g.moveTo(X(lo), Y(lo)); g.lineTo(X(hi), Y(hi)); g.stroke();
+  g.setLineDash([]);
+
+  g.fillStyle = 'rgba(120,214,217,.55)';
+  for (const [a, b] of pts) { g.beginPath(); g.arc(X(a), Y(b), 1.9, 0, 6.2832); g.fill(); }
+
+  const { sd1, sd2 } = r.poincare;
+  if (Number.isFinite(sd1) && Number.isFinite(sd2)) {
+    const ma = pts.reduce((t, p) => t + p[0], 0)/pts.length;
+    const mb = pts.reduce((t, p) => t + p[1], 0)/pts.length;
+    const sx = (w - L - R)/(hi - lo), sy = (h - T - B)/(hi - lo);
+    g.save(); g.translate(X(ma), Y(mb)); g.rotate(-Math.PI/4);
+    g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.5;
+    g.beginPath(); g.ellipse(0, 0, sd2*sx, sd1*sy, 0, 0, 6.2832); g.stroke();
+    g.restore();
+  }
+  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillText(`RRn+1 (ms) · ${pts.length} pairs`, L+4, T+9);
+  g.fillText('RRn (ms)', w - 62, h - 8);
+}
+
+/* The Lomb-Scargle periodogram with the three bands shaded.
+
+   Bands the record is too short to have settled are shaded but hatched with
+   a warning tint, because a VLF number off a two minute strip is not a
+   small measurement - it is not a measurement. */
+function drawHrvPsd(r) {
+  const surface = prepareAnalysisCanvas('analysisHrvPsdCanvas'); if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface;
+  const psd = r.psd;
+  if (!psd.ok) { hrvEmpty(g, w, h, psd.why || 'No spectrum.'); return; }
+  const L = 46, B = 26, T = 10, R = 10;
+  const fMax = 0.4;
+  const X = f => L + f/fMax*(w - L - R);
+  let peak = 0;
+  for (let i = 0; i < psd.power.length; i++) if (psd.power[i] > peak) peak = psd.power[i];
+  if (!(peak > 0)) { hrvEmpty(g, w, h, 'No spectral power.'); return; }
+  const Y = v => h - B - (v/peak)*(h - T - B);
+
+  const TINT = { vlf:'rgba(146,176,210,.10)', lf:'rgba(240,158,74,.13)', hf:'rgba(120,214,217,.13)' };
+  for (const b of HRV_BANDS) {
+    g.fillStyle = psd.bands[b.key].enough ? TINT[b.key] : 'rgba(240,158,74,.07)';
+    g.fillRect(X(b.lo), T, X(Math.min(b.hi, fMax)) - X(b.lo), h - T - B);
+    g.fillStyle = 'rgba(146,176,210,.7)'; g.font = '600 9px ui-monospace, monospace';
+    g.fillText(b.label + (psd.bands[b.key].enough ? '' : ' ?'), X(b.lo) + 3, T + 10);
+  }
+  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  for (let i = 1; i <= 4; i++) {
+    const y = Math.round(T + (h - T - B)*i/5)+0.5;
+    g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
+  }
+  g.beginPath();
+  for (let i = 0; i < psd.freqs.length; i++) {
+    const x = X(psd.freqs[i]), y = Y(psd.power[i]);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.lineTo(X(fMax), h - B); g.lineTo(L, h - B); g.closePath();
+  g.fillStyle = 'rgba(120,214,217,.18)'; g.fill();
+  g.beginPath();
+  for (let i = 0; i < psd.freqs.length; i++) {
+    const x = X(psd.freqs[i]), y = Y(psd.power[i]);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.strokeStyle = 'rgb(120,214,217)'; g.lineWidth = 1.5; g.stroke();
+
+  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  for (const f of [0.1, 0.2, 0.3, 0.4]) g.fillText(f.toFixed(1), X(f) - 8, h - 8);
+  g.fillText('Hz', L - 26, h - 8);
+  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillText(`${psd.n} NN · ${(psd.spanSec/60).toFixed(1)} min`, L + 4, h - B - 6);
 }
 
 function prepareAnalysisCanvas(id) {
@@ -9407,6 +9960,7 @@ function renderAnalysisResult() {
   setText('aSdnn', Number.isFinite(r.hrv.sdnn) ? r.hrv.sdnn.toFixed(1)+' ms' : 'N/A');
   setText('aRmssd', Number.isFinite(r.hrv.rmssd) ? r.hrv.rmssd.toFixed(1)+' ms' : 'N/A');
   setText('aPnn50', Number.isFinite(r.hrv.pnn50) ? r.hrv.pnn50.toFixed(1)+' %' : 'N/A');
+  renderHrvPanel(r);
   setText('aMeanRr', Number.isFinite(r.hrv.mean) ? r.hrv.mean.toFixed(1)+' ms' : 'N/A');
   setText('aInterpretation', r.interpretation);
   drawScope(r); drawHistogram(r); drawFft(r);
@@ -9784,6 +10338,8 @@ function boot() {
   bootOptional('SPI clock memory', renderSpiRememberLine);
   bootOptional('A/B segments', () => { abLoad(); renderAbTable(); });
   bootOptional('pack curve', () => { loadPackCurve(); renderPackCurve(); });
+  bootOptional('explainers', wireExplainers);
+  bootOptional('trace visibility', loadTraceVisibility);
   applySweepSettings();
   applyActiveModeConfiguration(true);
   updateAnalysisAvailability();
@@ -9819,6 +10375,23 @@ function startRenderLoop() {
 }
 
 // Run an optional piece of boot work; a failure is logged and stepped over.
+/* Which explanations this reader has opened.
+
+   Keyed by position rather than by content, because the text is edited far
+   more often than the layout moves, and a key derived from the prose would
+   silently forget every block the moment a sentence changed. */
+function wireExplainers() {
+  let open = {};
+  try { open = JSON.parse(localStorage.getItem('hecg01.explain') || '{}') || {}; } catch (e) { /* optional */ }
+  document.querySelectorAll('details.explain').forEach((d, i) => {
+    if (open[i]) d.open = true;
+    d.addEventListener('toggle', () => {
+      open[i] = d.open;
+      try { localStorage.setItem('hecg01.explain', JSON.stringify(open)); } catch (e) { /* optional */ }
+    });
+  });
+}
+
 function bootOptional(what, fn) {
   try { fn(); }
   catch (error) {
