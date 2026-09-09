@@ -425,7 +425,7 @@ body.splitting{cursor:col-resize;user-select:none}
    The channel spine is the only place the signal colour touches the
    chrome, and it is doing identification work, not decoration.
    ------------------------------------------------------------------ */
-.scope-stack{flex:1 1 auto;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:var(--sp-2);min-height:0}
+.scope-stack{flex:1 1 auto;display:grid;grid-auto-rows:minmax(0,1fr);gap:var(--sp-2);min-height:0}
 .scope-stack.solo{grid-template-rows:minmax(0,1fr)}
 .scope-stack.solo .chart-card{display:none}
 .scope-stack.solo .chart-card.soloed{display:flex}
@@ -954,7 +954,7 @@ body:has(.vital-tag.alert) .app-header{
   body{overflow:auto;display:block;height:auto}
   .workspace{grid-template-columns:1fr;padding:var(--sp-3)}
   .splitter{display:none}
-  .scope-stack{grid-template-rows:none}
+  .scope-stack{grid-template-rows:none;grid-auto-rows:auto}
   .chart-card{height:212px}
   .inspector{height:860px;margin-top:var(--sp-3)}
   .modal-body,.modal-body.wide{grid-template-columns:1fr}
@@ -1298,6 +1298,7 @@ body:has(.vital-tag.alert) .app-header{
       <button class="tab active" id="tabBtnSignal"    onclick="switchTab('signal')">Signal</button>
       <button class="tab"        id="tabBtnRegisters" onclick="switchTab('registers')">Registers</button>
       <button class="tab"        id="tabBtnAnalysis"  onclick="switchTab('analysis')">Analysis</button>
+      <button class="tab"        id="tabBtnMath"      onclick="switchTab('math')">Math</button>
       <button class="tab"        id="tabBtnStorage"   onclick="switchTab('storage')">Storage</button>
       <button class="tab"        id="tabBtnPower"     onclick="switchTab('power')">Power</button>
       <button class="tab"        id="tabBtnLed"       onclick="switchTab('led')">LED</button>
@@ -1611,6 +1612,83 @@ body:has(.vital-tag.alert) .app-header{
               enough for instead of printing four numbers as if they were equally earned.</p>
           </details>
         </section>
+      </div>
+    </div>
+
+    <!-- ============ MATH (real time) ============ -->
+    <div class="tabpanel" id="panelMath">
+      <div class="card">
+        <h4>Real-time maths</h4>
+        <div class="tiles c4 dense">
+          <div class="tile"><span>Update</span><b id="mRate">idle</b></div>
+          <div class="tile"><span>Beats in window</span><b id="mBeats">&mdash;</b></div>
+          <div class="tile"><span>Window</span><b id="mWindow">&mdash;</b></div>
+          <div class="tile"><span>Cost per update</span><b id="mCost">&mdash;</b></div>
+        </div>
+        <div class="ctl" style="margin-top:8px"><span>Control</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm primary" id="btnMathRun" onclick="toggleMathLive()">START</button>
+            <button class="btn sm" onclick="resetMathLive()">RESET</button>
+            <label class="field" style="margin:0"><span>Beats kept</span>
+              <select id="mathBeats" onchange="renderMathTab()">
+                <option value="60">60</option>
+                <option value="120" selected>120</option>
+                <option value="300">300</option>
+                <option value="600">600</option>
+              </select>
+            </label>
+            <label class="field" style="margin:0"><span>Spectrum length</span>
+              <select id="mathFftN" onchange="renderMathTab()">
+                <option value="1024">1,024</option>
+                <option value="2048" selected>2,048</option>
+                <option value="4096">4,096</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <details class="explain">
+          <summary>How this works<b>2</b></summary>
+          <p class="note">This tab differs from <b>Analysis</b> in one way that matters: Analysis freezes a private
+            copy and answers questions about that frozen block, so the same button pressed twice gives two different
+            answers about two different moments. Everything here is recomputed from the newest samples on a timer, so
+            it answers &ldquo;what is happening <i>now</i>&rdquo; and keeps answering it.</p>
+          <p class="note">It costs what it costs, and the cost is displayed rather than assumed: an FFT and a
+            Lomb&ndash;Scargle periodogram per update, timed and shown in <b>Cost per update</b>. Nothing here runs in
+            the animation loop, nothing drains the display queues, and the whole tab stops computing the moment you
+            switch away from it &mdash; a trace that stutters because a spectrum is being drawn behind it is a worse
+            instrument than one without the spectrum.</p>
+        </details>
+      </div>
+
+      <div class="card">
+        <h4>ECG spectrum &mdash; live</h4>
+        <div class="tiles c4 dense">
+          <div class="tile"><span>Dominant</span><b id="mPeak">&mdash;</b></div>
+          <div class="tile"><span>Mains 50 / 60 Hz</span><b id="mMains">&mdash;</b></div>
+          <div class="tile"><span>Baseline &lt; 0.5 Hz</span><b id="mBase">&mdash;</b></div>
+          <div class="tile"><span>QRS band 5&ndash;25 Hz</span><b id="mQrsBand">&mdash;</b></div>
+        </div>
+        <div class="plot" style="height:210px"><canvas id="mathFftCanvas"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h4>Heart-rate variability &mdash; live</h4>
+        <div class="tiles c4 dense">
+          <div class="tile"><span>Mean HR</span><b id="mHr">&mdash;</b></div>
+          <div class="tile"><span>Mean NN</span><b id="mMeanNn">&mdash;</b></div>
+          <div class="tile"><span>SDNN</span><b id="mSdnn">&mdash;</b></div>
+          <div class="tile"><span>RMSSD</span><b id="mRmssd">&mdash;</b></div>
+          <div class="tile"><span>pNN50</span><b id="mPnn50">&mdash;</b></div>
+          <div class="tile"><span>SD1 &middot; SD2</span><b id="mSd12">&mdash;</b></div>
+          <div class="tile"><span>Accepted</span><b id="mAccept">&mdash;</b></div>
+          <div class="tile"><span>LF/HF</span><b id="mLfHf">&mdash;</b></div>
+        </div>
+        <div class="grid2" style="margin-top:9px">
+          <div class="plot" style="height:220px"><canvas id="mathPoincareCanvas"></canvas></div>
+          <div class="plot" style="height:220px"><canvas id="mathHrvCanvas"></canvas></div>
+        </div>
+        <p class="callout">Engineering / evaluation display only &mdash; not arrhythmia classification and not a
+          medical diagnosis.</p>
       </div>
     </div>
 
@@ -2660,6 +2738,7 @@ const TACHO = (() => {
 
 function recordBeatInterval(sampleIndex) {
   TACHO.push('tachoHr', PALETTE.ecgFilt, sampleIndex, currentSps);
+  mathNoteBeat(sampleIndex, currentSps);
 }
 function recordBreathInterval(sampleIndex) {
   TACHO.push('tachoRr', PALETTE.respFilt, sampleIndex, currentSps);
@@ -5289,7 +5368,7 @@ function updateModeMetrics(channel, currentValue, rawAdc) {
    12. TAB NAVIGATION
    ================================================================== */
 const DIAG_TABS = ['link','storage','power','led'];
-const ALL_TABS = ['signal','registers','analysis','storage','power','led','link'];
+const ALL_TABS = ['signal','registers','analysis','math','storage','power','led','link'];
 
 async function switchTab(tabId) {
   const wasDiag = DIAG_TABS.includes(activeTab);
@@ -5304,6 +5383,8 @@ async function switchTab(tabId) {
   const isDiag = DIAG_TABS.includes(tabId);
   if (isDiag) updateProtocolUi(true);
   if (tabId === 'power') renderPowerTab();
+  if (tabId === 'math') { if (mathLive.on) startMathTimer(); requestAnimationFrame(renderMathTab); }
+  else stopMathTimer();
   if (tabId === 'led') { renderLedTab(); if (connected) sendCmd('LED?'); }
   if (tabId === 'analysis') {
     updateAnalysisAvailability();
@@ -6945,7 +7026,8 @@ function lipoPctFromMv(mv) {
  *  Characterising this pack
  * ------------------------------------------------------------------ */
 
-const packRun = { mv: [], intervalSec: 0, spanSec: 0, full: false, receiving: false };
+const packRun = { mv: [], intervalSec: 0, spanSec: 0, full: false, receiving: false,
+                  expected: 0, short: false };
 
 /* Pool adjacent violators.
 
@@ -7026,6 +7108,11 @@ function handleCurveFrame(text) {
     packRun.intervalSec = Number(f.IV) || 360;
     packRun.spanSec = Number(f.SPANS) || 0;
     packRun.full = f.FULL === '1';
+    // How many the board says it is about to send. Checked at CURVE:END,
+    // because a curve with a run missing out of the middle does not blank
+    // the derivation - it rescales it, and 1 - i/(n-1) over the survivors
+    // is a wrong percent curve with nothing on screen to say so.
+    packRun.expected = Number(f.N) || 0;
     setText('curveStatus', `receiving ${Number(f.N)||0} points…`);
     return;
   }
@@ -7039,7 +7126,21 @@ function handleCurveFrame(text) {
     }
     return;
   }
-  if (text === 'CURVE:END') { packRun.receiving = false; renderPackCurve(); }
+  if (text === 'CURVE:END') {
+    packRun.receiving = false;
+    packRun.short = packRun.expected > 0 && packRun.mv.length !== packRun.expected;
+    if (packRun.short) {
+      packRun.mv = [];
+      toast(`Curve arrived incomplete — the board offered ${packRun.expected} points. Press FETCH again.`,
+            'bad', 7000);
+    }
+    renderPackCurve();
+  }
+  if (text.startsWith('CURVE:ERR')) {
+    packRun.receiving = false; packRun.mv = [];
+    toast('Board could not format the curve: ' + text, 'bad', 6000);
+    renderPackCurve();
+  }
 }
 
 function fetchPackCurve() {
@@ -9750,8 +9851,8 @@ function renderHrvPanel(r) {
    ALONG it is the slow drift of rate over the record. The SD1/SD2 ellipse
    is drawn on top so the two tile numbers can be checked by eye against
    the cloud they claim to describe. */
-function drawPoincare(r) {
-  const surface = prepareAnalysisCanvas('analysisPoincareCanvas'); if (!surface) return;
+function drawPoincare(r, surface) {
+  surface = surface || prepareAnalysisCanvas('analysisPoincareCanvas'); if (!surface) return;
   const { ctx: g, width: w, height: h } = surface;
   const pts = r.poincare.points;
   if (pts.length < 4) { hrvEmpty(g, w, h, 'Needs at least 5 accepted beats.'); return; }
@@ -9785,10 +9886,16 @@ function drawPoincare(r) {
     const ma = pts.reduce((t, p) => t + p[0], 0)/pts.length;
     const mb = pts.reduce((t, p) => t + p[1], 0)/pts.length;
     const sx = (w - L - R)/(hi - lo), sy = (h - T - B)/(hi - lo);
-    g.save(); g.translate(X(ma), Y(mb)); g.rotate(-Math.PI/4);
-    g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.5;
-    g.beginPath(); g.ellipse(0, 0, sd2*sx, sd1*sy, 0, 0, 6.2832); g.stroke();
-    g.restore();
+    // ellipse() throws on a negative radius rather than skipping the call,
+    // so a degenerate scale must not reach it even if the guard above ever
+    // stops catching every route in.
+    const rx = Math.abs(sd2*sx), ry = Math.abs(sd1*sy);
+    if (rx > 0 && ry > 0 && Number.isFinite(rx) && Number.isFinite(ry)) {
+      g.save(); g.translate(X(ma), Y(mb)); g.rotate(-Math.PI/4);
+      g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.5;
+      g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, 6.2832); g.stroke();
+      g.restore();
+    }
   }
   g.fillStyle = 'rgba(146,176,210,.75)';
   g.fillText(`RRn+1 (ms) · ${pts.length} pairs`, L+4, T+9);
@@ -9800,8 +9907,8 @@ function drawPoincare(r) {
    Bands the record is too short to have settled are shaded but hatched with
    a warning tint, because a VLF number off a two minute strip is not a
    small measurement - it is not a measurement. */
-function drawHrvPsd(r) {
-  const surface = prepareAnalysisCanvas('analysisHrvPsdCanvas'); if (!surface) return;
+function drawHrvPsd(r, surface) {
+  surface = surface || prepareAnalysisCanvas('analysisHrvPsdCanvas'); if (!surface) return;
   const { ctx: g, width: w, height: h } = surface;
   const psd = r.psd;
   if (!psd.ok) { hrvEmpty(g, w, h, psd.why || 'No spectrum.'); return; }
@@ -9846,9 +9953,227 @@ function drawHrvPsd(r) {
   g.fillText(`${psd.n} NN · ${(psd.spanSec/60).toFixed(1)} min`, L + 4, h - B - 6);
 }
 
+/* ==================================================================
+   REAL-TIME MATHS
+   ------------------------------------------------------------------
+   The Analysis tab freezes a block and answers questions about that
+   block. Useful, and not the same instrument: press its button twice
+   and you get two answers about two different moments, with nothing
+   in between. This tab recomputes from the newest samples on a timer.
+
+   Two rules keep it from costing the sweep anything.
+
+   It never runs in the animation loop and never touches the display
+   queues - it reads analysisHistory, which is the non-destructive ring
+   the acquisition path already fills, and its own RR log, which is
+   appended from the same place the tachogram is.
+
+   And it stops dead when the tab is not showing. A spectrum nobody is
+   looking at that makes the trace stutter is a worse instrument than
+   no spectrum at all, so the interval is torn down on switch rather
+   than left ticking behind a hidden panel.
+   ================================================================== */
+const mathLive = { on:false, timer:null, rr:[], lastBeat:null, ms:0, updates:0, lastAt:0 };
+const MATH_RR_CAP = 1200;
+
+// Appended from the same place the tachogram is fed. Sample indices, so
+// the RR series is in the acquisition clock rather than wall time.
+function mathNoteBeat(sampleIndex, fs) {
+  if (mathLive.lastBeat !== null) {
+    const ms = (sampleIndex - mathLive.lastBeat)*1000/(fs || 500);
+    if (ms >= 200 && ms <= 3000) {
+      mathLive.rr.push(ms);
+      if (mathLive.rr.length > MATH_RR_CAP) mathLive.rr.shift();
+    }
+  }
+  mathLive.lastBeat = sampleIndex;
+}
+
+function toggleMathLive() {
+  mathLive.on = !mathLive.on;
+  const btn = $('btnMathRun');
+  if (btn) { btn.textContent = mathLive.on ? 'STOP' : 'START'; btn.classList.toggle('primary', !mathLive.on); }
+  if (mathLive.on) startMathTimer(); else stopMathTimer();
+  renderMathTab();
+}
+
+function startMathTimer() {
+  stopMathTimer();
+  // 4 Hz. Fast enough that the spectrum visibly tracks a lead being
+  // touched, slow enough that a 4096-point FFT is a rounding error.
+  mathLive.timer = setInterval(() => {
+    if (activeTab !== 'math' || !mathLive.on) return;
+    renderMathTab();
+  }, 250);
+}
+function stopMathTimer() { if (mathLive.timer) { clearInterval(mathLive.timer); mathLive.timer = null; } }
+
+function resetMathLive() {
+  mathLive.rr.length = 0; mathLive.lastBeat = null;
+  mathLive.updates = 0; mathLive.ms = 0;
+  renderMathTab();
+}
+
+function renderMathTab() {
+  if (activeTab !== 'math') return;
+  const t0 = performance.now();
+
+  const keep = Number($('mathBeats')?.value) || 120;
+  const fftN = Number($('mathFftN')?.value) || 2048;
+  const rr = mathLive.rr.slice(-keep);
+
+  // ---- spectrum of the live ECG --------------------------------------
+  const hist = analysisHistory.latest(fftN);
+  let spec = null;
+  if (hist.count >= 256) {
+    const v = new Float64Array(hist.count);
+    for (let i = 0; i < hist.count; i++) v[i] = hist.ch2[i];
+    try { spec = fftSpectrum(v, currentSps, fftN); } catch (e) { spec = null; }
+  }
+  renderMathSpectrum(spec);
+
+  // ---- HRV on the rolling window --------------------------------------
+  const nn = nnIntervals(rr);
+  const hrv = hrvMetrics(nn.nn);
+  const pc = poincareMetrics(nn.nn);
+  const psd = hrvSpectrum(nn.nn);
+
+  const fmt = (v, d, u) => Number.isFinite(v) ? v.toFixed(d) + (u || '') : '—';
+  setText('mHr', Number.isFinite(hrv.mean) && hrv.mean > 0 ? `${(60000/hrv.mean).toFixed(1)} bpm` : '—');
+  setText('mMeanNn', fmt(hrv.mean, 1, ' ms'));
+  setText('mSdnn', fmt(hrv.sdnn, 1, ' ms'));
+  setText('mRmssd', fmt(hrv.rmssd, 1, ' ms'));
+  setText('mPnn50', fmt(hrv.pnn50, 1, ' %'));
+  setText('mSd12', Number.isFinite(pc.sd1) ? `${pc.sd1.toFixed(1)} · ${pc.sd2.toFixed(1)} ms` : '—');
+  const acc = $('mAccept');
+  if (acc) {
+    const pct = nn.total > 0 ? 100*nn.nn.length/nn.total : NaN;
+    acc.textContent = nn.total > 0 ? `${nn.nn.length} / ${nn.total} (${pct.toFixed(0)} %)` : '—';
+    acc.className = !(nn.total > 0) ? '' : pct >= 95 ? 'good' : pct >= 80 ? 'warn' : 'bad';
+  }
+  const lfhf = $('mLfHf');
+  if (lfhf) {
+    lfhf.textContent = psd.ok && Number.isFinite(psd.lfhf) ? psd.lfhf.toFixed(2) : '—';
+    lfhf.className = psd.ok && psd.bands.lf.enough && psd.bands.hf.enough ? '' : 'warn';
+    lfhf.title = psd.ok
+      ? (psd.bands.hf.enough ? 'LF and HF both have enough record behind them.'
+         : `Only ${(psd.spanSec/60).toFixed(1)} min of beats — HF wants 1 min, LF wants 2.`)
+      : (psd.why || '');
+  }
+
+  setText('mBeats', `${rr.length} of ${keep}`);
+  setText('mWindow', psd.ok ? `${(psd.spanSec/60).toFixed(1)} min · ${(fftN/currentSps).toFixed(1)} s of ECG`
+                            : `${(fftN/currentSps).toFixed(1)} s of ECG`);
+  drawMathPoincare(pc);
+  drawMathHrvPsd(psd);
+
+  const dt = performance.now() - t0;
+  mathLive.ms = mathLive.updates ? mathLive.ms*0.8 + dt*0.2 : dt;
+  mathLive.updates++;
+  setText('mCost', `${mathLive.ms.toFixed(1)} ms`);
+  const rateEl = $('mRate');
+  if (rateEl) {
+    rateEl.textContent = mathLive.on ? '4 Hz — running' : 'stopped';
+    rateEl.className = mathLive.on ? 'good' : '';
+  }
+}
+
+function renderMathSpectrum(spec) {
+  const surface = prepareAnalysisCanvas('mathFftCanvas');
+  if (!spec) {
+    setText('mPeak', '—'); setText('mMains', '—'); setText('mBase', '—'); setText('mQrsBand', '—');
+    if (surface) hrvEmpty(surface.ctx, surface.width, surface.height, 'Waiting for samples.');
+    return;
+  }
+  const { amplitude, power, resolution } = spec;
+  const binOf = hz => Math.round(hz/resolution);
+  const bandSum = (lo, hi) => {
+    let t = 0;
+    for (let i = Math.max(1, binOf(lo)); i <= Math.min(power.length-1, binOf(hi)); i++) t += power[i];
+    return t;
+  };
+  let total = 0;
+  for (let i = 1; i < power.length; i++) total += power[i];
+  const pct = v => total > 0 ? `${(100*v/total).toFixed(1)} %` : '—';
+
+  let peak = 0, peakBin = 1;
+  for (let i = Math.max(1, binOf(0.5)); i < amplitude.length; i++)
+    if (amplitude[i] > peak) { peak = amplitude[i]; peakBin = i; }
+  setText('mPeak', `${(peakBin*resolution).toFixed(2)} Hz`);
+  const mains = bandSum(48, 52) + bandSum(58, 62);
+  const mainsEl = $('mMains');
+  if (mainsEl) {
+    mainsEl.textContent = pct(mains);
+    const share = total > 0 ? mains/total : 0;
+    mainsEl.className = share < 0.02 ? 'good' : share < 0.1 ? 'warn' : 'bad';
+    mainsEl.title = 'Share of total power in the two mains bands. Above a few percent means the notch is off '
+                  + 'or the electrodes are picking up the room.';
+  }
+  setText('mBase', pct(bandSum(0.01, 0.5)));
+  setText('mQrsBand', pct(bandSum(5, 25)));
+
+  if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface;
+  const L = 46, B = 24, T = 10, R = 8;
+  const maxHz = Math.min(currentSps/2, 80);
+  const last = Math.max(2, Math.min(amplitude.length-1, Math.floor(maxHz/resolution)));
+  let top = 0;
+  for (let i = 1; i <= last; i++) if (amplitude[i] > top) top = amplitude[i];
+  if (!(top > 0)) { hrvEmpty(g, w, h, 'No spectral power.'); return; }
+  const X = hz => L + hz/maxHz*(w - L - R);
+  // Decades, because a QRS complex and mains hum differ by orders of
+  // magnitude and a linear axis shows one of them.
+  const floor = top*1e-4;
+  const Y = m => h - B - (Math.log10(Math.max(m, floor)/floor)/Math.log10(top/floor))*(h - T - B);
+
+  g.fillStyle = 'rgba(120,214,217,.10)';
+  g.fillRect(X(5), T, X(25) - X(5), h - T - B);
+  g.fillStyle = 'rgba(240,158,74,.12)';
+  g.fillRect(X(48), T, Math.max(2, X(52) - X(48)), h - T - B);
+  if (maxHz > 62) g.fillRect(X(58), T, Math.max(2, X(62) - X(58)), h - T - B);
+
+  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  for (let i = 1; i <= 3; i++) {
+    const y = Math.round(T + (h - T - B)*i/4)+0.5;
+    g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
+  }
+  g.beginPath();
+  for (let i = 1; i <= last; i++) {
+    const x = X(i*resolution), y = Y(amplitude[i]);
+    i === 1 ? g.moveTo(x, y) : g.lineTo(x, y);
+  }
+  g.strokeStyle = 'rgb(120,214,217)'; g.lineWidth = 1.3; g.stroke();
+
+  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  for (const hz of [10, 20, 40, 60, 80]) if (hz <= maxHz) g.fillText(String(hz), X(hz)-6, h-7);
+  g.fillText('Hz', 6, h-7);
+  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillText('QRS 5–25', X(5)+3, T+9);
+  if (X(48) < w - 40) g.fillText('mains', X(48)+3, T+9);
+  g.fillText('log magnitude · 4 decades', L+4, h-B-5);
+}
+
+function drawMathPoincare(pc) {
+  const surface = prepareAnalysisCanvas('mathPoincareCanvas'); if (!surface) return;
+  drawPoincare({ poincare: pc }, surface);
+}
+function drawMathHrvPsd(psd) {
+  const surface = prepareAnalysisCanvas('mathHrvCanvas'); if (!surface) return;
+  drawHrvPsd({ psd }, surface);
+}
+
 function prepareAnalysisCanvas(id) {
   const canvas = $(id); if (!canvas) return null;
   const rect = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  /* A canvas inside a display:none sub-view measures 0 x 0.
+     Every plot here then computes its scale factor as (width - margins) /
+     span, which goes NEGATIVE, and most of them quietly draw nothing off
+     screen - but ctx.ellipse() throws on a negative radius, which is how
+     the Poincare cloud took the whole analysis run down with
+     "The major-axis radius provided (-11.4766) is negative".
+     One guard, at the point where the measurement is taken, rather than a
+     clamp in each of the six drawing functions. */
+  if (!(rect.width > 1) || !(rect.height > 1)) return null;
   canvas.width = Math.max(2, Math.round(rect.width*dpr));
   canvas.height = Math.max(2, Math.round(rect.height*dpr));
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -10019,10 +10344,15 @@ function switchAnalysisView(view) {
     $('anView'+name).style.display = id === view ? 'block' : 'none';
     $('anSub'+name).classList.toggle('active', id === view);
   });
+  // Each sub-view is drawn on the frame after it becomes visible, because
+  // a canvas cannot be measured while its section is display:none. The
+  // phys view was the one case missing from this list, which is why its
+  // two plots were being drawn against a zero-sized canvas.
   if (analysisResult) requestAnimationFrame(() => {
     if (view === 'scope') drawScope(analysisResult);
     else if (view === 'hist') drawHistogram(analysisResult);
     else if (view === 'fft') drawFft(analysisResult);
+    else if (view === 'phys') { drawPoincare(analysisResult); drawHrvPsd(analysisResult); }
   });
 }
 function exportAnalysisCsv() {
