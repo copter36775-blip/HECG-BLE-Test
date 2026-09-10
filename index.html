@@ -6779,7 +6779,30 @@ function renderPowerTab() {
     sleepEl.textContent = pwrState.SLEEP === undefined ? '—' : `${sleep.toFixed(1)} %`;
     sleepEl.className = sleep >= 60 ? 'good' : sleep >= 25 ? 'warn' : 'bad';
   }
-  setText('pwrWakes', pwrState.WAKES ? `${Number(pwrState.WAKES).toLocaleString()} /s` : '—');
+  /* Wake-ups, split into the two things that cause them.
+
+     "1,971 per second at 1000 SPS" reads like one wake per sample plus
+     noise, and it is not: the FreeRTOS tick in this BSP runs at 1024 Hz and
+     is a second, entirely separate alarm clock. DRDY and the tick together
+     predict 2024, the board measures 1971, and the shortfall is the two
+     landing inside one sleep often enough to be counted once.
+
+     That matters for what is worth doing next. Moving acquisition to PPI
+     removes the DRDY half and cannot touch the tick half, so this tile is
+     what says how much of the ceiling is actually reachable. */
+  const wakes = Number(pwrState.WAKES);
+  const wakeEl = $('pwrWakes');
+  if (wakeEl) {
+    const sps = Number(pwrState.SPS) || currentSps || 0;
+    const TICK_HZ = 1024;                       // configTICK_RATE_HZ in this BSP
+    wakeEl.textContent = Number.isFinite(wakes) ? `${wakes.toLocaleString()} /s` : '—';
+    wakeEl.title = Number.isFinite(wakes) && sps > 0
+      ? `DRDY accounts for ${sps.toLocaleString()} of these and the FreeRTOS tick for about `
+        + `${TICK_HZ.toLocaleString()} more (${(sps + TICK_HZ).toLocaleString()} predicted, `
+        + `${wakes.toLocaleString()} measured — the difference is a DRDY and a tick sharing one sleep). `
+        + 'Hardware acquisition removes the DRDY share; the tick is a framework constant and stays.'
+      : 'How often the core left sleep.';
+  }
   setText('pwrPasses', pwrState.PASS === undefined ? '—' : `${Number(pwrState.PASS).toLocaleString()} /s`);
   const idleOn = pwrState.IDLE === '1';
   setText('pwrIdleState', pwrState.IDLE === undefined ? '—' : idleOn ? 'ENABLED' : 'DISABLED');
