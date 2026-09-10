@@ -2007,6 +2007,7 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Idle sleep</span><b id="pwrIdleState">—</b></div>
           <div class="tile"><span>Idle slice</span><b id="pwrSlice">—</b></div>
           <div class="tile"><span>ADS ISR load</span><b id="pwrIsrLoad">—</b></div>
+          <div class="tile"><span>Capture engine</span><b id="pwrCapture">&mdash;</b></div>
           <div class="tile"><span>ADS conversions</span><b id="pwrAdsAlive">—</b></div>
           <div class="tile"><span>DC/DC buck</span><b id="pwrDcdc">—</b></div>
         </div>
@@ -6790,6 +6791,18 @@ function renderPowerTab() {
      That matters for what is worth doing next. Moving acquisition to PPI
      removes the DRDY half and cannot touch the tick half, so this tile is
      what says how much of the ceiling is actually reachable. */
+  const capEl = $('pwrCapture');
+  if (capEl) {
+    const ppi = pwrState.CAP === 'PPI';
+    capEl.textContent = pwrState.CAP ? (ppi ? 'PPI \u00b7 hardware' : 'ISR \u00b7 per sample') : '\u2014';
+    capEl.className = pwrState.CAP ? (ppi ? 'good' : '') : '';
+    capEl.title = ppi
+      ? 'GPIOTE and PPI read DRDY, drive CS and run the transfer with no CPU involvement; the core wakes '
+        + 'once per 37-sample batch instead of once per sample. Built by the xiaoblesense_ppi environment.'
+      : 'Every DRDY edge raises an interrupt and the core blocks inside the transfer. The known-good path, '
+        + 'built by the default environment.';
+  }
+
   const wakes = Number(pwrState.WAKES);
   const wakeEl = $('pwrWakes');
   if (wakeEl) {
