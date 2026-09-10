@@ -1702,6 +1702,39 @@ body:has(.vital-tag.alert) .app-header{
       </div>
 
       <div class="card">
+        <h4>Thoracic impedance &mdash; artefact and beat confirmation</h4>
+        <div class="tiles c4 dense">
+          <div class="tile"><span>Electrode disturbance</span><b id="impLevel">&mdash;</b></div>
+          <div class="tile"><span>Above 3 Hz</span><b id="impRms">&mdash;</b></div>
+          <div class="tile"><span>Beats confirmed</span><b id="impConfirm">&mdash;</b></div>
+          <div class="tile"><span>R &rarr; impedance peak</span><b id="impDelay">&mdash;</b></div>
+        </div>
+        <div class="plot" style="height:210px"><canvas id="impEnsembleCanvas"></canvas></div>
+        <details class="explain">
+          <summary>How this works<b>3</b></summary>
+          <p class="note"><b>There is no respiration sensor in the ADS1292R.</b> There is a carrier oscillator driving
+            the <i>same electrode pair the ECG is measured on</i>, and a demodulator that recovers how the impedance
+            between them changes. Breathing moves the chest and the impedance follows &mdash; but breathing is not the
+            only thing that moves it, and the rest is what this card uses. It is also why TI ties the respiration rate
+            to the ECG rate instead of offering a slow one: below about 20 SPS the useful part is gone.</p>
+          <p class="note"><b>Artefact.</b> An electrode shifting against skin changes contact impedance in a wideband
+            step. Above 3 Hz nothing physiological is left in this channel, so energy up there is mechanical
+            disturbance and nothing else. At 1000 SPS that is a transient you can measure; at 10 SPS it aliases into
+            0.1&ndash;0.7 Hz and becomes indistinguishable from a breath. Because it is measured on the <b>same
+            electrodes as the ECG</b>, it is a direct statement about whether the ECG of that moment can be trusted
+            &mdash; which is what a 24-hour recording needs most and what commercial Holters carry an artefact channel
+            for.</p>
+          <p class="note"><b>Beat confirmation.</b> Each systole pushes blood out of the thorax and the impedance dips
+            with it &mdash; a small signal at heart rate riding under the respiration. The plot is an <b>ensemble
+            average</b>: the impedance in the 500 ms after every detected R wave, averaged. Noise that is not locked to
+            the trigger falls as 1/&radic;N; anything genuinely time-locked does not fall at all, and the <b>z</b>
+            score is that ratio made explicit. A peak 100&ndash;350 ms after the R is the mechanical echo of the beat
+            the ECG detected electrically &mdash; <b>two different physical mechanisms agreeing</b>, which is evidence
+            of a different quality from one detector's opinion.</p>
+        </details>
+      </div>
+
+      <div class="card">
         <h4>Derivations &mdash; every number, with today&rsquo;s operands in it</h4>
         <div id="mathDerivations"></div>
         <details class="explain">
@@ -3675,6 +3708,7 @@ function resetSignalPathForGap() {
   analysisHistory.clear(); analysisGapSerial++; updateAnalysisAvailability();
   resetEcgFilters(); respDSP.reset();
   qrsDetector.reset(); respDetector.reset(); if (typeof TACHO !== 'undefined') TACHO.reset();
+  if (typeof impReset === 'function') impReset();
   modeStats.forEach(s => s.reset()); modeTrend.forEach(t => t.reset());
   CHARTS.forEach(c => c.queueBreak());
   setText('valHR', '--'); setVitalTag('hrQuality', 'STREAM GAP');
@@ -6277,6 +6311,7 @@ function clearGraphs() {
   CHARTS.forEach(c => c.reset());
   resetEcgFilters(); respDSP.reset();
   qrsDetector.reset(); respDetector.reset(); if (typeof TACHO !== 'undefined') TACHO.reset();
+  if (typeof impReset === 'function') impReset();
   latestQrsResult = { quality:'LEARNING', hr:null };
   latestRespResult = { quality:'LEARNING', rate:null };
   modeStats.forEach(s => s.reset()); modeTrend.forEach(t => t.reset());
@@ -9480,6 +9515,15 @@ function animationLoop(frameTimestamp = performance.now()) {
             lastFlashedBeat = qrsDetector.lastBeat; flashBeat('beatHr');
           }
         }
+        // Impedance ring is filled here rather than from the BLE handler so
+        // that beat indices and impedance samples share one clock - the
+        // ensemble average is entirely about when one happened relative to
+        // the other, and two clocks would quietly smear it.
+        if (resultCh1.available && Number.isFinite(resultCh1.value)) {
+          imp.fs = currentSps;
+          impPush(resultCh1.value, qrsDetector.lastBeat !== null && qrsDetector.lastBeat === lastFlashedBeat
+                                   && latestQrsResult && latestQrsResult.quality > 0);
+        }
         if (activeDisplayModes[0]?.normal && resultCh1.available) {
           latestRespResult = respDetector.process(resultCh1.value, Math.abs(alignedCh1) < 0.985*8388607);
           if (respDetector.lastCross !== null && respDetector.lastCross !== lastFlashedBreath) {
@@ -10143,6 +10187,212 @@ function drawHrvPsd(r, surface) {
    than left ticking behind a hidden panel.
    ================================================================== */
 const mathLive = { on:false, timer:null, rr:[], lastBeat:null, ms:0, updates:0, lastAt:0 };
+
+/* ==================================================================
+   THORACIC IMPEDANCE - what the respiration channel is really for
+   ------------------------------------------------------------------
+   The ADS1292R does not have a respiration sensor. It has a carrier
+   oscillator that drives the SAME electrode pair the ECG is measured
+   on, and a demodulator that recovers how the impedance between them
+   is changing. Breathing moves the chest and the impedance follows,
+   which is where the breath rate comes from - but breathing is not the
+   only thing that moves it, and that is the part worth using.
+
+   TWO THINGS FALL OUT OF THE SAME CHANNEL, and neither survives a low
+   sample rate:
+
+   1. ARTEFACT. An electrode shifting against skin changes contact
+      impedance in a wideband step. Above about 3 Hz nothing
+      physiological is left in this channel, so energy up there is
+      mechanical disturbance and nothing else. At 1000 SPS that is a
+      transient you can see and measure. At 10 SPS it aliases straight
+      down into 0.1-0.7 Hz and becomes indistinguishable from a breath -
+      which is why TI ties the respiration rate to the ECG rate rather
+      than offering a slow one.
+
+      Because it is measured on the SAME electrodes as the ECG, it is a
+      direct statement about whether the ECG of that moment can be
+      trusted. Commercial Holters carry an artefact channel for exactly
+      this reason: the value of a 24 hour recording is not only what it
+      contains, it is knowing which parts of it to believe.
+
+   2. THE HEARTBEAT, mechanically. Each systole pushes blood out of the
+      thorax and the impedance dips with it, a small signal at heart
+      rate riding under the respiration. Band-pass 0.8-3 Hz and it is
+      there - far above what a 10 SPS channel could represent.
+
+      That gives something a single detector cannot: CONFIRMATION FROM
+      A DIFFERENT PHYSICAL MECHANISM. The QRS detector sees electrical
+      depolarisation. This sees the mechanical consequence. A beat that
+      both agree on is evidence; a QRS with no mechanical echo behind it
+      over hundreds of beats is a detector chasing noise.
+
+   The confirmation is done by ensemble averaging, the same method used
+   for evoked potentials: cut a window out of the impedance signal at
+   every detected R wave, average them, and see whether anything
+   survives. Noise that is not locked to the trigger falls as 1/sqrt(N);
+   anything genuinely time-locked does not fall at all. The z score
+   below is that ratio made explicit.
+   ================================================================== */
+const IMP_CAP = 16384;                       // 16 s at 1000 SPS, 32 s at 500
+const imp = {
+  buf: new Float32Array(IMP_CAP), head: 0, size: 0, total: 0,
+  beats: [],                                 // absolute sample index per R
+  fs: 500,
+};
+
+function impPush(value, beatHere) {
+  imp.buf[imp.head] = value;
+  imp.head = (imp.head + 1) % IMP_CAP;
+  if (imp.size < IMP_CAP) imp.size++;
+  imp.total++;
+  if (beatHere) {
+    imp.beats.push(imp.total);
+    while (imp.beats.length > 400) imp.beats.shift();
+  }
+}
+function impReset() { imp.head = 0; imp.size = 0; imp.total = 0; imp.beats.length = 0; }
+
+// Oldest-first copy, plus the absolute index of its first sample.
+function impWindow() {
+  const n = imp.size;
+  const out = new Float32Array(n);
+  const start = (imp.head + IMP_CAP - n) % IMP_CAP;
+  for (let i = 0; i < n; i++) out[i] = imp.buf[(start + i) % IMP_CAP];
+  return { v: out, firstIndex: imp.total - n };
+}
+
+/* One-pole high pass and a two-pole band pass, written out rather than
+   pulled from the display filter chain: those carry a group delay that is
+   corrected for presentation, and a correction is exactly what must not
+   happen here - the whole measurement is about WHEN something occurred
+   relative to an R wave. */
+function hpEnergy(v, fs, cutHz) {
+  const rc = 1/(2*Math.PI*cutHz), dt = 1/fs, a = rc/(rc + dt);
+  let prevIn = v.length ? v[0] : 0, prevOut = 0, sum = 0;
+  for (let i = 0; i < v.length; i++) {
+    const out = a*(prevOut + v[i] - prevIn);
+    prevIn = v[i]; prevOut = out;
+    sum += out*out;
+  }
+  return v.length ? Math.sqrt(sum/v.length) : NaN;
+}
+
+function bandPass(v, fs, loHz, hiHz) {
+  const out = new Float32Array(v.length);
+  const rcL = 1/(2*Math.PI*loHz), rcH = 1/(2*Math.PI*hiHz), dt = 1/fs;
+  const aH = rcL/(rcL + dt), aL = dt/(rcH + dt);
+  let prevIn = v.length ? v[0] : 0, hp = 0, lp = 0;
+  for (let i = 0; i < v.length; i++) {
+    hp = aH*(hp + v[i] - prevIn); prevIn = v[i];
+    lp = lp + aL*(hp - lp);
+    out[i] = lp;
+  }
+  return out;
+}
+
+/* Ensemble average of the impedance, triggered on each R wave.
+
+   Window runs from the R to 500 ms after it, which covers ejection and the
+   start of filling. Windows are baseline-corrected to their own first
+   sample so that slow respiration drift does not add a ramp to the average
+   - respiration is a hundred times slower than the window and would
+   otherwise dominate it entirely. */
+function impedanceBeatConfirm(fsHz) {
+  const w = impWindow();
+  const n = w.v.length;
+  const fs = fsHz || 500;
+  const winLen = Math.round(0.5*fs);
+  if (n < winLen*4) return { ok:false, why:`${(n/fs).toFixed(1)} s of impedance — needs ${(winLen*4/fs).toFixed(1)} s` };
+
+  const band = bandPass(w.v, fs, 0.8, 3.0);
+  const usable = imp.beats.filter(b => b - w.firstIndex >= 0 && b - w.firstIndex + winLen < n);
+  if (usable.length < 8) return { ok:false, why:`${usable.length} beats inside the window — needs 8` };
+
+  /* Each window is linearly detrended before it joins the average.
+
+     Subtracting only the value at the R - the obvious thing, and what this
+     did first - leaves the respiration ramp in. Respiration is a hundred
+     times slower than a 500 ms window, so across that window it is very
+     nearly a straight line, and a straight line of random slope added to
+     every window is variance that grows with lag. The measured symptom was
+     exact: the ensemble peak drifted to the far end of the window, where
+     the ramp is largest, and z collapsed to 0.3 on a signal that was
+     genuinely present. Removing the line removes the confound and leaves
+     the part that is actually locked to the trigger. */
+  const avg = new Float64Array(winLen);
+  const sq  = new Float64Array(winLen);
+  const xbar = (winLen - 1)/2;
+  let sxx = 0;
+  for (let k = 0; k < winLen; k++) sxx += (k - xbar)*(k - xbar);
+  for (const b of usable) {
+    const at = b - w.firstIndex;
+    let sy = 0, sxy = 0;
+    for (let k = 0; k < winLen; k++) {
+      const y = band[at + k];
+      sy += y; sxy += (k - xbar)*y;
+    }
+    const mean = sy/winLen, slope = sxx > 0 ? sxy/sxx : 0;
+    for (let k = 0; k < winLen; k++) {
+      const d = band[at + k] - (mean + slope*(k - xbar));
+      avg[k] += d; sq[k] += d*d;
+    }
+  }
+  const N = usable.length;
+  /* The lag that matters is the largest EXCURSION, not the largest value.
+     Ejection pushes blood out of the thorax and impedance FALLS, so the
+     cardiac signature is a dip; searching for a maximum found the noisiest
+     positive sample instead and reported the delay as 2 ms - before the
+     mechanical event it was supposed to be measuring could physically have
+     happened. */
+  let peak = -Infinity, trough = Infinity, peakK = 0, best = -1;
+  for (let k = 0; k < winLen; k++) {
+    avg[k] /= N;
+    if (avg[k] > peak) peak = avg[k];
+    if (avg[k] < trough) trough = avg[k];
+    const mag = Math.abs(avg[k]);
+    if (mag > best) { best = mag; peakK = k; }
+  }
+  // Standard error of the mean at each lag, taken at the peak: this is the
+  // level the average would sit at if nothing were time-locked at all.
+  let varAtPeak = sq[peakK]/N - avg[peakK]*avg[peakK];
+  if (!(varAtPeak > 0)) varAtPeak = 0;
+  const sem = Math.sqrt(varAtPeak/N);
+  const z = sem > 0 ? Math.abs(avg[peakK])/sem : NaN;
+  return {
+    ok: true, n: N, avg, winLen, fs,
+    pp: peak - trough, z,
+    delayMs: 1000*peakK/fs,
+    confirmed: Number.isFinite(z) && z >= 3 && peakK/fs > 0.05 && peakK/fs < 0.45,
+  };
+}
+
+/* How disturbed the electrodes are, right now.
+
+   Energy above 3 Hz in a channel whose physiology stops below 1 Hz. The
+   number is reported relative to a slow running floor rather than in
+   absolute units, because the absolute level depends on gain, electrode
+   type and body habitus, and none of those are what the question is
+   about - "worse than this recording's own quiet" is. */
+const impFloor = { value: NaN };
+function impedanceArtefact(fsHz) {
+  const w = impWindow();
+  const fs = fsHz || 500;
+  const n = w.v.length;
+  if (n < fs) return { ok:false, why:'not enough impedance history' };
+  const recent = w.v.subarray(Math.max(0, n - Math.round(fs*2)));
+  const rms = hpEnergy(recent, fs, 3.0);
+  if (!Number.isFinite(rms)) return { ok:false, why:'no signal' };
+  impFloor.value = Number.isFinite(impFloor.value)
+    ? Math.min(impFloor.value*1.0005, impFloor.value + 0.02*(rms - impFloor.value))
+    : rms;
+  const floor = Math.max(impFloor.value, 1e-9);
+  const ratio = rms/floor;
+  return {
+    ok: true, rms, floor, ratio,
+    level: ratio < 2 ? 'quiet' : ratio < 5 ? 'moving' : 'disturbed',
+  };
+}
 const MATH_RR_CAP = 1200;
 
 // Appended from the same place the tachogram is fed. Sample indices, so
@@ -10235,6 +10485,7 @@ function renderMathTab() {
                             : `${(fftN/currentSps).toFixed(1)} s of ECG`);
   drawMathPoincare(pc);
   drawMathHrvPsd(psd);
+  renderImpedance();
   renderDerivations({ nn, hrv, pc, psd, spec,
                       rw: (typeof rWave !== 'undefined') ? rWave.read() : null });
 
@@ -10439,6 +10690,80 @@ function renderDerivations(ctx) {
   // under a millisecond, and the alternative is ten sets of element refs
   // kept in step with a table that is meant to be easy to add a row to.
   host.innerHTML = html;
+}
+
+function renderImpedance() {
+  const art = impedanceArtefact(imp.fs);
+  const lv = $('impLevel');
+  if (lv) {
+    lv.textContent = art.ok ? `${art.level} · ${art.ratio.toFixed(1)}× floor` : (art.why || '—');
+    lv.className = !art.ok ? '' : art.ratio < 2 ? 'good' : art.ratio < 5 ? 'warn' : 'bad';
+    lv.title = 'Energy above 3 Hz on the impedance channel, against this recording\u2019s own quiet floor. '
+             + 'Reported as a ratio rather than an absolute because the absolute depends on gain, electrode '
+             + 'type and body habitus, none of which are the question.';
+  }
+  setText('impRms', art.ok ? `${art.rms.toExponential(2)} (floor ${art.floor.toExponential(2)})` : '—');
+
+  const bc = impedanceBeatConfirm(imp.fs);
+  const cf = $('impConfirm');
+  if (cf) {
+    cf.textContent = bc.ok ? `${bc.confirmed ? 'YES' : 'no'} · z ${bc.z.toFixed(1)} over ${bc.n} beats`
+                           : (bc.why || '—');
+    cf.className = !bc.ok ? '' : bc.confirmed ? 'good' : 'warn';
+    cf.title = bc.ok
+      ? 'z is the ensemble peak divided by the standard error of the mean at that lag — how far the averaged '
+        + 'impedance stands above what unlocked noise alone would produce. Confirmation also requires the peak '
+        + 'to fall 50–450 ms after the R, because a mechanical echo cannot precede the electrical event.'
+      : 'Needs a few seconds of impedance and at least eight detected beats.';
+  }
+  setText('impDelay', bc.ok ? `${bc.delayMs.toFixed(0)} ms` : '—');
+  drawImpedanceEnsemble(bc);
+}
+
+/* The ensemble average, with the band it has to peak inside marked.
+
+   Drawn with the individual-window scatter behind it would be nicer still,
+   but the point of the picture is the shape that survived averaging - so
+   what is shown is that shape and the window in which it would mean
+   something. */
+function drawImpedanceEnsemble(bc) {
+  const surface = prepareAnalysisCanvas('impEnsembleCanvas'); if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface;
+  if (!bc.ok) { hrvEmpty(g, w, h, bc.why || 'No ensemble yet.'); return; }
+  const L = 8, R = 8, T = 12, B = 22;
+  const ms = 1000*bc.winLen/bc.fs;
+  const X = t => L + (t/ms)*(w - L - R);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < bc.winLen; i++) { if (bc.avg[i] < lo) lo = bc.avg[i]; if (bc.avg[i] > hi) hi = bc.avg[i]; }
+  const span = Math.max(hi - lo, 1e-12);
+  const Y = v => h - B - ((v - lo)/span)*(h - T - B);
+
+  // The physiologically plausible window for an ejection-driven dip.
+  g.fillStyle = 'rgba(61,220,151,.09)';
+  g.fillRect(X(50), T, X(350) - X(50), h - T - B);
+
+  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  for (let t = 100; t < ms; t += 100) {
+    const x = Math.round(X(t))+0.5;
+    g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke();
+  }
+  // The trigger itself: t = 0 is the R wave.
+  g.strokeStyle = 'rgba(240,158,74,.75)'; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(X(0)+0.5, T); g.lineTo(X(0)+0.5, h - B); g.stroke();
+
+  g.beginPath();
+  for (let i = 0; i < bc.winLen; i++) {
+    const x = X(1000*i/bc.fs), y = Y(bc.avg[i]);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.strokeStyle = bc.confirmed ? 'rgb(61,220,151)' : 'rgb(146,176,210)';
+  g.lineWidth = 1.8; g.stroke();
+
+  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  for (let t = 0; t < ms; t += 100) g.fillText(`${t}`, X(t) - 6, h - 7);
+  g.fillText('ms after R', X(0) + 4, h - 7);
+  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillText(`${bc.n} beats averaged · z ${bc.z.toFixed(1)}`, L + 4, T + 9);
 }
 
 function renderMathSpectrum(spec) {
