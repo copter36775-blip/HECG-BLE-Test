@@ -54,6 +54,8 @@ not need pairing.
 - Live four-trace scope — raw and filtered ECG, raw and filtered respiration —
   with the raw and filtered traces time-aligned rather than merely overlaid
 - Heart rate by Pan–Tompkins, R-wave amplitude, respiration rate, RR tachogram
+- Rhythm card with the same thresholds as the offline analysis, checked strip by
+  strip against it (`web02/tools/test_rhythm_rt.py`, 10 / 10)
 - ADS1292R register inspector and lead-off status
 - microSD browser: file list, preview, download, and the write-cadence card
   (per-write duration trace, buffer fill, data-at-risk)
@@ -64,8 +66,17 @@ not need pairing.
 
 ## Firmware
 
-This console speaks to firmware **V2.1.3**. Older firmware still connects; features
+This console speaks to firmware **V2.1.4**. Older firmware still connects; features
 added later degrade to blank tiles rather than wrong numbers.
+
+V2.1.4 stamps each block at the moment the samples were acquired rather than when
+they reached the card, measures the real sample rate on the device and reports it
+in the `SYS` message. The console shows it next to the nominal rate, and works out
+its own decoded rate over a 60-second regression instead of counting packets per
+second - the arrival count follows the radio's connection interval, not the ADC.
+The ADS1292R runs from its internal oscillator, measured at -460 to -1600 ppm
+against the MCU crystal and inside the datasheet's tolerance, so the difference is
+real and worth showing.
 
 ## Editing
 

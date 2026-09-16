@@ -1702,6 +1702,36 @@ body:has(.vital-tag.alert) .app-header{
       </div>
 
       <div class="card">
+        <h4>Rhythm &mdash; 30-second determination</h4>
+        <div class="tiles c4 dense">
+          <div class="tile"><span>Determination</span><b id="rhythmLabel">&mdash;</b></div>
+          <div class="tile"><span>Heart rate</span><b id="rhythmHr">&mdash;</b></div>
+          <div class="tile"><span>Ectopy in strip</span><b id="rhythmEctopy">&mdash;</b></div>
+          <div class="tile"><span>QRS, median beat</span><b id="rhythmQrs">&mdash;</b></div>
+        </div>
+        <p class="note" id="rhythmTags" style="margin:6px 0 0">&nbsp;</p>
+        <div class="plot" style="height:160px;margin-top:8px"><canvas id="rhythmStripCanvas"></canvas></div>
+        <div class="plot" style="height:170px;margin-top:8px"><canvas id="rhythmBeatCanvas"></canvas></div>
+        <div id="rhythmDerivations"></div>
+        <p class="note" id="rhythmMeta"></p>
+        <details class="explain">
+          <summary>How this works<b>3</b></summary>
+          <p class="note"><b>The same criteria as the PC report.</b> Every two seconds the last 30 seconds of ECG are
+            put through exactly the rules <code>PY_HECG_Vivo</code> applies to a recording from the card: beats are found,
+            each is labelled normal, ventricular (V), supraventricular (S) or unreadable, and the strip gets one
+            determination. The thresholds are the same numbers, on purpose &mdash; a phone and a report that disagree
+            about the same strip would make both of them worthless.</p>
+          <p class="note"><b>Order of determinations, first match wins.</b> Unreadable (over 25 % artefact or low
+            signal) &rarr; Possible AFib (irregular by nRMSSD, turning points and entropy, and no P wave) &rarr; Wide QRS
+            (median beat over 130 ms) &rarr; with PVCs &rarr; with SVE &rarr; Bradycardia (under 50) &rarr; Tachycardia
+            (over 100) &rarr; Normal sinus rhythm. What the strip also shows goes in the line under the tiles.</p>
+          <p class="note"><b>Not a diagnosis.</b> One lead cannot prove a rhythm is sinus, cannot measure a 12-lead QRS
+            width, and cannot tell failing electrode contact from a heart that has stopped. This is a screening aid on
+            a research prototype; anything it shows needs a clinician and the full strip.</p>
+        </details>
+      </div>
+
+      <div class="card">
         <h4>Thoracic impedance &mdash; artefact and beat confirmation</h4>
         <div class="tiles c4 dense">
           <div class="tile"><span>Electrode disturbance</span><b id="impLevel">&mdash;</b></div>
@@ -3488,6 +3518,7 @@ let linkTxQueue = 0, linkBackpressure = 0, linkHardErrors = 0, linkNonBlocking =
 let linkTextDrops = 0;
 let lastDisconnectReason = 0, bootResetReason = '00000000';
 let decodedSampleRate = 0, decodedSamplesWindow = 0, decodedRateStarted = performance.now();
+let rateTrail = [];      // [arrival ms, device sample index] over the last 60 s
 let frozen = false;
 let deviceSpiHz = 0, deviceSpiDrive = 0, recommendedSpiHz = 0;
 
@@ -3495,7 +3526,7 @@ function resetProtocolStats() {
   protocolMode = 'WAIT'; rxPacketCount = packetGapCount = crcErrorCount = 0;
   firmwareRingDrops = firmwareBleDrops = browserQueueDrops = 0;
   lastPacketSequence = lastPacketSample = null;
-  decodedSampleRate = decodedSamplesWindow = 0; decodedRateStarted = performance.now();
+  decodedSampleRate = decodedSamplesWindow = 0; decodedRateStarted = performance.now(); rateTrail = [];
   updateProtocolUi(true);
 }
 
@@ -3509,14 +3540,27 @@ function updateProtocolUi(force = false) {
   const now = performance.now();
   if (!force && now - lastProtocolUi < 220) return;
   lastProtocolUi = now;
-  const elapsed = now - decodedRateStarted;
-  if (elapsed >= 1000) { decodedSampleRate = decodedSamplesWindow*1000/elapsed; decodedSamplesWindow = 0; decodedRateStarted = now; }
+  /* Decoded rate over 60 s of the device's own sample index, not a 1-s count.
+
+     BLE does not deliver at the sample rate: Windows negotiates a long connection interval and
+     then hands over several notifications at once, so the samples that happen to arrive inside
+     one second swing by a whole packet or two (37-74 samples) either side of the truth. That
+     is what made "Decoded rate" look unstable while no sample was being lost - the packet index
+     shows every one arrived. Counting the recorder's sample index across a minute of arrival
+     times keeps the burst error to one connection interval in 60 s. */
+  if (lastPacketSample !== null) {
+    rateTrail.push([now, lastPacketSample]);
+    while (rateTrail.length > 2 && now - rateTrail[0][0] > 60000) rateTrail.shift();
+    const [t0, s0] = rateTrail[0], span = now - t0;
+    if (span >= 5000) decodedSampleRate = (((lastPacketSample - s0) >>> 0) * 1000) / span;
+  }
+  decodedSamplesWindow = 0; decodedRateStarted = now;
   const phyLabel = linkPhy === 2 ? '2M' : linkPhy === 4 ? 'CODED' : '1M';
   const values = {
     pProtocol: protocolMode, pPackets: rxPacketCount.toLocaleString(), pGaps: packetGapCount,
     pCrc: crcErrorCount, pRingDrops: firmwareRingDrops, pBleDrops: firmwareBleDrops,
     pBrowserDrops: browserQueueDrops, pRenderHz: Math.round(measuredRenderHz) + ' Hz',
-    pRxSps: Math.round(decodedSampleRate) + ' SPS',
+    pRxSps: decodedSampleRate ? decodedSampleRate.toFixed(1) + ' SPS (60 s)' : '—',
     pBuffer: Math.round(rxQueueCh2.length*1000/currentSps) + ' ms',
     pMtu: `${linkMtu} / ${linkDle}`, pPhy: `${phyLabel} / ${linkRssi} dBm`,
     pConnInterval: linkConnIntervalMs ? `${linkConnIntervalMs.toFixed(2)} ms` : '—',
@@ -3710,6 +3754,7 @@ function resetSignalPathForGap() {
   resetEcgFilters(); respDSP.reset();
   qrsDetector.reset(); respDetector.reset(); if (typeof TACHO !== 'undefined') TACHO.reset();
   if (typeof impReset === 'function') impReset();
+  if (typeof rhythmReset === 'function') rhythmReset();
   modeStats.forEach(s => s.reset()); modeTrend.forEach(t => t.reset());
   CHARTS.forEach(c => c.queueBreak());
   setText('valHR', '--'); setVitalTag('hrQuality', 'STREAM GAP');
@@ -3738,7 +3783,7 @@ function acceptFramedPacket(sequence, firstSample, sampleCount, dropSnapshot, lo
   }
   lastPacketSequence = sequence;
   lastPacketSample = (firstSample + sampleCount) >>> 0;
-  if (streamGap) resetSignalPathForGap();
+  if (streamGap) { resetSignalPathForGap(); rateTrail = []; }
 }
 
 function handleBleData(e) {
@@ -4189,7 +4234,15 @@ function updateSystemTelemetry(f) {
   setText('sysTemp', Number.isFinite(temp) ? (temp/100).toFixed(2) + ' °C' : '—');
   setText('sysIsr', `${f.ISR||0} / ${f.ISRMAX||0} µs`);
   setText('sysDrdy', Number(f.DRDY||0).toLocaleString());
-  setText('sysFs', (f.FS||'—') + ' SPS');
+  // V2.1.4 measures the ADS1292R's real rate against the board's crystal (SPSM). The
+  // internal oscillator is +-0.5 % at 25 C, so "500" is really 497.5-502.5 on any given part.
+  const spsm = Number(f.SPSM), nominalFs = Number(f.FS);
+  if (spsm > 0 && nominalFs > 0) {
+    const ppm = (spsm / nominalFs - 1) * 1e6;
+    setText('sysFs', `${nominalFs} SPS · measured ${spsm.toFixed(2)} (${ppm >= 0 ? '+' : ''}${ppm.toFixed(0)} ppm)`);
+  } else {
+    setText('sysFs', (f.FS||'—') + ' SPS' + (f.SPSM !== undefined ? ' · measuring…' : ''));
+  }
   setText('sysFw', f.FW || '—');
 
   applySpiTelemetry(Number(f.SPIHZ)||0, Number(f.SPIDRV)||0);
@@ -10522,6 +10575,7 @@ function renderMathTab() {
   drawMathPoincare(pc);
   drawMathHrvPsd(psd);
   renderImpedance();
+  renderRhythm();
   renderDerivations({ nn, hrv, pc, psd, spec,
                       rw: (typeof rWave !== 'undefined') ? rWave.read() : null });
 
@@ -10800,6 +10854,715 @@ function drawImpedanceEnsemble(bc) {
   g.fillText('ms after R', X(0) + 4, h - 7);
   g.fillStyle = 'rgba(146,176,210,.75)';
   g.fillText(`${bc.n} beats averaged · z ${bc.z.toFixed(1)}`, L + 4, T + 9);
+}
+
+/* ==================================================================
+   RHYTHM - the 30-second determination, live
+   ------------------------------------------------------------------
+   The same criteria as PY_HECG_Vivo (hecg_vivo/quality.py, qrs.py,
+   beats.py, rhythm.py), applied to the last 30 seconds of the live ECG
+   every two seconds. Every threshold below is that code's number, and
+   tools/test_rhythm_rt.py runs both on the same signals and compares.
+
+   Two differences, both forced by a browser and a live stream:
+   * filters are forward-backward biquads rather than an FFT mask - the
+     same zero phase, far cheaper on 15 000 samples;
+   * "this recording's usual QRS amplitude", which the low-signal test is
+     measured against, is this session's running median, because a whole
+     recording does not exist yet.
+   ================================================================== */
+const RH = {
+  WINDOW_S: 30, MIN_S: 10, UPDATE_MS: 2000,
+  BRADY: 50, TACHY: 100, WIDE_QRS: 120, WIDE_GUARD: 10,
+  AF_MIN_RR: 12, AF_NRMSSD: 0.10, AF_SHE: 0.55, AF_TPR_Z: 2.5, P_WAVE_MIN: 0.04,
+  // Beat labels as PY_HECG_Vivo beats.label_beats (HScribe-style): SVE is 25 % earlier than the
+  // mean of the 16 preceding normal RR AND abrupt; V needs timing and a clean signal; else U.
+  SVPB_PREM: 0.25, S_ABRUPT: 0.88, MIN_ECTOPIC_RR: 0.24, REF_INTERVALS: 16, REF_MIN: 4, REF_RESEED: 40,
+  V_PREMATURE: 0.90, V_MIN_SNR: 10, V_SNR_FRACTION: 0.30, V_AMP_MIN: 0.40, V_AMP_MAX: 6.0, V_WIDE_ALONE_SNR: 0.60,
+  RUN_CORR: 0.75, RUN_NOISY_CORR: 0.90, RUN_NEIGHBOURS: 5, RUN_NOISY_NEIGHBOURS: 2,
+  P_REF_FRACTION: 0.5, P_FLOOR: 0.015, P_REF_REGULAR: 0.06,
+  COMPENSATORY: 1.80, CORR_ABNORMAL: 0.80,
+  WIDTH_EXCESS: 40, CORR_WIDTH_CORROBORATE: 0.95, MIN_SNR: 5,
+  WIDTH_SLOPE: 0.15, WIDTH_CURV: 0.08, WIDTH_SMOOTH_S: 0.004, WIDTH_QUIET_S: 0.010, WIDTH_SEARCH_S: 0.22,
+  HF_RATIO: 0.10, SPAN_RATIO: 4.0, LOW_AMP_RATIO: 0.20, SEG_S: 2.0, LOW_SMOOTH: 5,
+  UNREADABLE_BAD: 0.25, UNREADABLE_BEATS: 0.30,
+  RECOVER_MIN_GAP_S: 1.2, RECOVER_RR_FACTOR: 1.5, RECOVER_CORR: 0.85, RECOVER_MIN_AMP: 0.10,
+};
+const RH_NSR = 'Normal sinus rhythm', RH_BRADY = 'Bradycardia', RH_TACHY = 'Tachycardia',
+      RH_AF = 'Possible AFib', RH_PVC = 'Sinus rhythm with PVCs', RH_SVE = 'Sinus rhythm with SVE',
+      RH_WIDE = 'Wide QRS', RH_UNREAD = 'Unreadable';
+const RH_TINT = { [RH_NSR]:'good', [RH_BRADY]:'warn', [RH_TACHY]:'warn', [RH_SVE]:'warn',
+                  [RH_AF]:'bad', [RH_PVC]:'bad', [RH_WIDE]:'bad', [RH_UNREAD]:'' };
+const rhythmState = { lastAt: 0, result: null, refPeaks: [], pRefs: [] };
+function rhythmReset() { rhythmState.lastAt = 0; rhythmState.result = null; rhythmState.refPeaks.length = 0; rhythmState.pRefs.length = 0; }
+
+// ---- small numeric helpers --------------------------------------------
+function rhFinite(a) { const out = []; for (const v of a) if (Number.isFinite(v)) out.push(v); return out; }
+function rhPercentile(a, p) {
+  const v = Float64Array.from(rhFinite(a)).sort();
+  if (!v.length) return NaN;
+  const k = (v.length - 1) * p / 100, f = Math.floor(k), c = Math.ceil(k);
+  return v[f] + (v[c] - v[f]) * (k - f);
+}
+function rhMedian(a) { return rhPercentile(a, 50); }
+function rhMovingMean(x, width) {
+  const w = Math.max(1, Math.round(width)), n = x.length, c = new Float64Array(n + 1), out = new Float64Array(n);
+  for (let i = 0; i < n; i++) c[i + 1] = c[i] + x[i];
+  const half = Math.floor(w / 2);
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - half), hi = Math.min(n, i - half + w);
+    out[i] = (c[hi] - c[lo]) / (hi - lo);
+  }
+  return out;
+}
+function rhRollingMedian(x, width) {
+  const half = Math.floor(width / 2), out = new Float64Array(x.length);
+  for (let i = 0; i < x.length; i++) out[i] = rhMedian(x.slice(Math.max(0, i - half), Math.min(x.length, i + half + 1)));
+  return out;
+}
+
+// ---- zero-phase filters -----------------------------------------------
+function rhBiquad(fs, f0, highpass) {
+  const w = 2 * Math.PI * Math.min(f0, fs * 0.45) / fs, cw = Math.cos(w), sw = Math.sin(w);
+  const alpha = sw / (2 * Math.SQRT1_2), a0 = 1 + alpha;
+  const b = highpass ? [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2] : [(1 - cw) / 2, 1 - cw, (1 - cw) / 2];
+  return [b[0] / a0, b[1] / a0, b[2] / a0, (-2 * cw) / a0, (1 - alpha) / a0];
+}
+function rhPass(x, c) {
+  // Started at rest on the first sample, so there is no switch-on step to ring.
+  const y = new Float64Array(x.length);
+  const dc = (c[0] + c[1] + c[2]) / (1 + c[3] + c[4]);
+  let x1 = x[0], x2 = x[0], y1 = dc * x[0], y2 = dc * x[0];
+  for (let i = 0; i < x.length; i++) {
+    const v = c[0] * x[i] + c[1] * x1 + c[2] * x2 - c[3] * y1 - c[4] * y2;
+    x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v;
+  }
+  return y;
+}
+function rhZeroPhase(x, c) { const f = rhPass(x, c).reverse(); return rhPass(f, c).reverse(); }
+function rhBandpass(x, fs, lo, hi) {
+  let y = Float64Array.from(x);
+  if (lo) y = rhZeroPhase(y, rhBiquad(fs, lo, true));
+  if (hi) y = rhZeroPhase(y, rhBiquad(fs, hi, false));
+  return y;
+}
+
+// ---- signal quality (quality.py) ----------------------------------------
+function rhQuality(wide, fs, sessionRef) {
+  const seg = Math.round(RH.SEG_S * fs), n = wide.length, count = Math.floor(n / seg);
+  const bad = new Uint8Array(n);
+  if (count < 3) return { bad, ref: NaN, peaks: [], noisy: [], low: [], ratio: [], hfWorst: NaN, badFraction: 0 };
+  const k = Math.max(3, Math.round(0.04 * fs));
+  const hf = [], span = [], peak = [];
+  for (let s = 0; s < count; s++) {
+    const x = wide.subarray(s * seg, (s + 1) * seg);
+    const centre = rhMedian(x), ma = rhMovingMean(x, k), resid = new Float64Array(x.length), dev = new Float64Array(x.length);
+    for (let i = 0; i < x.length; i++) { resid[i] = x[i] - ma[i]; dev[i] = Math.abs(x[i] - centre); }
+    const rm = rhMedian(resid);
+    for (let i = 0; i < resid.length; i++) resid[i] = Math.abs(resid[i] - rm);
+    hf.push(1.4826 * rhMedian(resid));
+    span.push(rhPercentile(x, 99.5) - rhPercentile(x, 0.5));
+    peak.push(rhPercentile(dev, 99));
+  }
+  const ownRef = rhMedian(peak);
+  const ref = (sessionRef && sessionRef > 0) ? sessionRef : ownRef;
+  const noisy = hf.map((h, i) => h > RH.HF_RATIO * ref || span[i] > RH.SPAN_RATIO * ref);
+  // Smoothed over 10 s so the one bigger beat that breathing lifts every
+  // few seconds cannot make a failing stretch look healthy two seconds at a time.
+  const ratio = rhRollingMedian(peak.map(p => p / ref), RH.LOW_SMOOTH);
+  const low = ratio.map((r, i) => r < RH.LOW_AMP_RATIO && !noisy[i]);
+  let badCount = 0;
+  for (let s = 0; s < count; s++) {
+    if (noisy[s] || low[s]) { bad.fill(1, s * seg, (s + 1) * seg); badCount += seg; }
+  }
+  return { bad, ref, ownRef, peaks: peak, noisy, low, ratio: Array.from(ratio), hf,
+           hfWorst: Math.max(...hf) / ref, badFraction: badCount / n };
+}
+
+// ---- beat detection (qrs.py) --------------------------------------------
+function rhDetect(wide, fs) {
+  const n = wide.length;
+  const det = rhBandpass(wide, fs, 5, 18);
+  const slope = new Float64Array(n);
+  for (let i = 2; i < n - 2; i++) slope[i] = (-det[i - 2] - 2 * det[i - 1] + 2 * det[i + 1] + det[i + 2]) * fs / 8;
+  const sq = new Float64Array(n);
+  for (let i = 0; i < n; i++) sq[i] = slope[i] * slope[i];
+  const mwi = rhMovingMean(sq, 0.150 * fs);
+
+  const w = Math.round(8 * fs), count = Math.max(1, Math.floor(n / w));
+  const centres = [], sig = [], noi = [];
+  for (let k = 0; k < count; k++) {
+    const a = k * w, b = k === count - 1 ? n : (k + 1) * w, seg = mwi.subarray(a, b);
+    centres.push((a + b) / 2); sig.push(rhPercentile(seg, 98)); noi.push(rhPercentile(seg, 50));
+  }
+  const ref = rhMedian(sig);
+  if (!(ref > 0)) return [];
+  // The 2 % floor, not 8 %: energy goes with amplitude squared, and 8 % let a
+  // shrunken QRS vanish into five-second "pauses" on a real recording.
+  const perWindow = sig.map((sv, k) => Math.max(noi[k] + 0.30 * (sv - noi[k]), 0.02 * ref));
+  const thr = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    if (count === 1 || i <= centres[0]) { thr[i] = perWindow[0]; continue; }
+    if (i >= centres[count - 1]) { thr[i] = perWindow[count - 1]; continue; }
+    let k = 0; while (centres[k + 1] < i) k++;
+    const f = (i - centres[k]) / (centres[k + 1] - centres[k]);
+    thr[i] = perWindow[k] + f * (perWindow[k + 1] - perWindow[k]);
+  }
+
+  const absSlope = slope.map(Math.abs);
+  const reach = Math.round(0.10 * fs), refractory = Math.round(0.25 * fs), tWin = Math.round(0.36 * fs);
+  const slopeAt = p => { let m = 0; for (let j = Math.max(0, p - reach); j <= Math.min(n - 1, p + reach); j++) m = Math.max(m, absSlope[j]); return m; };
+  const kept = [], keptSlope = [];
+  for (let p = 1; p < n - 1; p++) {
+    if (!(mwi[p] > mwi[p - 1] && mwi[p] >= mwi[p + 1] && mwi[p] > thr[p])) continue;
+    const sl = slopeAt(p);
+    if (kept.length) {
+      const dt = p - kept[kept.length - 1];
+      if (dt < refractory) {
+        if (mwi[p] > mwi[kept[kept.length - 1]]) { kept[kept.length - 1] = p; keptSlope[keptSlope.length - 1] = sl; }
+        continue;
+      }
+      if (dt < tWin && sl < 0.5 * keptSlope[keptSlope.length - 1]) continue;   // a T wave
+    }
+    kept.push(p); keptSlope.push(sl);
+  }
+
+  // Search-back at half threshold inside any interval 1.66x too long.
+  if (kept.length >= 4) {
+    const typical = rhMedian(keptSlope), added = [];
+    for (let i = 0; i < kept.length - 1; i++) {
+      const rr = kept[i + 1] - kept[i];
+      const hist = [];
+      for (let j = Math.max(0, i - 8); j < i; j++) hist.push(kept[j + 1] - kept[j]);
+      const med = hist.length ? rhMedian(hist) : rhMedian(kept.slice(1, 9).map((v, j) => v - kept[j]));
+      if (!(rr > 1.66 * med)) continue;
+      const a = kept[i] + refractory, b = kept[i + 1] - refractory;
+      if (b - a < 2) continue;
+      let best = a; for (let j = a; j < b; j++) if (mwi[j] > mwi[best]) best = j;
+      if (mwi[best] <= 0.5 * thr[best] || slopeAt(best) < 0.15 * typical) continue;
+      added.push(best);
+    }
+    kept.push(...added); kept.sort((x, y) => x - y);
+  }
+
+  // Fiducial: largest excursion, then the centre of slope energy (see
+  // qrs.py _centre_on_energy - a notched QRS otherwise flips between peaks).
+  const half = Math.round(0.12 * fs), er = Math.round(0.10 * fs);
+  let r = kept.map(p => {
+    const a = Math.max(0, p - half), b = Math.min(n - 1, p + half), seg = wide.subarray(a, b + 1), base = rhMedian(seg);
+    let best = a, bv = -1;
+    for (let j = a; j <= b; j++) { const e = Math.abs(wide[j] - base); if (e > bv) { bv = e; best = j; } }
+    return best;
+  });
+  for (let it = 0; it < 2; it++) {
+    r = r.map(p => {
+      let tot = 0, mom = 0;
+      for (let o = -er; o <= er; o++) {
+        const j = p + o; if (j < 1 || j >= n) continue;
+        const e = (wide[j] - wide[j - 1]) ** 2; tot += e; mom += e * o;
+      }
+      return tot > 0 ? Math.min(n - 1, Math.max(0, p + Math.round(mom / tot))) : p;
+    });
+  }
+  r.sort((x, y) => x - y);
+  const out = [];
+  for (const p of r) {
+    if (out.length && p - out[out.length - 1] < Math.round(0.20 * fs)) {
+      if (Math.abs(wide[p]) > Math.abs(wide[out[out.length - 1]])) out[out.length - 1] = p;
+    } else out.push(p);
+  }
+  return out;
+}
+
+// ---- per-beat measurements and labels (beats.py) -------------------------
+function rhWindow(wide, r, pre, post) {
+  const row = new Float64Array(pre + post + 1);
+  for (let o = -pre; o <= post; o++) { const j = r + o; row[o + pre] = (j >= 0 && j < wide.length) ? wide[j] : NaN; }
+  return row;
+}
+function rhEdges(row, fs, pre) {
+  const h = Math.round(RH.WIDTH_SEARCH_S * fs);
+  if (pre - h < 0 || pre + h >= row.length) return null;
+  const sub = row.subarray(pre - h, pre + h + 1);
+  for (const v of sub) if (!Number.isFinite(v)) return null;
+  const m = 2 * h, k = Math.max(1, Math.round(RH.WIDTH_SMOOTH_S * fs));
+  const sRaw = new Float64Array(m), cRaw = new Float64Array(m);
+  for (let j = 0; j < m; j++) sRaw[j] = Math.abs(sub[j + 1] - sub[j]);
+  for (let j = 0; j < m - 1; j++) cRaw[j + 1] = Math.abs(sub[j + 2] - 2 * sub[j + 1] + sub[j]);
+  cRaw[0] = cRaw[1];
+  const slope = rhMovingMean(sRaw, k), curv = rhMovingMean(cRaw, k);
+  let ps = 0, pc = 0;
+  for (let j = 0; j < m; j++) { ps = Math.max(ps, slope[j]); pc = Math.max(pc, curv[j]); }
+  if (!(ps > 0 && pc > 0)) return null;
+  const q = Math.max(1, Math.round(RH.WIDTH_QUIET_S * fs));
+  const quiet = j => slope[j] < RH.WIDTH_SLOPE * ps && curv[j] < RH.WIDTH_CURV * pc;
+  let run = 0, onset = null, offset = null;
+  for (let j = 0; j < h; j++) { run = quiet(j) ? run + 1 : 0; if (run >= q) onset = j + 1; }
+  run = 0;
+  for (let j = h; j < m; j++) { run = quiet(j) ? run + 1 : 0; if (run >= q) { offset = j - q + 1; break; } }
+  if (onset === null || offset === null) return null;
+  return { on: (onset - h) * 1000 / fs, off: (offset - h) * 1000 / fs };
+}
+function rhCorr(row, tmpl, fs, pre) {
+  const a = Math.round(0.10 * fs), b = Math.round(0.12 * fs), lag = Math.round(0.02 * fs), len = a + b + 1;
+  let mb = 0; for (let i = 0; i < len; i++) mb += row[pre - a + i]; mb /= len;
+  const bc = new Float64Array(len); let nb = 0;
+  for (let i = 0; i < len; i++) { bc[i] = row[pre - a + i] - mb; nb += bc[i] * bc[i]; }
+  nb = Math.sqrt(nb);
+  let best = -Infinity;
+  for (let s = -lag; s <= lag; s++) {
+    const st = pre - a + s; if (st < 0 || st + len > tmpl.length) continue;
+    let mt = 0; for (let i = 0; i < len; i++) mt += tmpl[st + i]; mt /= len;
+    let dot = 0, nt = 0;
+    for (let i = 0; i < len; i++) { const t = tmpl[st + i] - mt; dot += bc[i] * t; nt += t * t; }
+    const c = dot / Math.max(nb * Math.sqrt(nt), 1e-12);
+    if (c > best) best = c;
+  }
+  return Number.isFinite(best) ? best : NaN;
+}
+function rhMedianRow(rows) {
+  if (!rows.length) return null;
+  const L = rows[0].length, out = new Float64Array(L), col = new Float64Array(rows.length);
+  for (let j = 0; j < L; j++) { for (let i = 0; i < rows.length; i++) col[i] = rows[i][j]; out[j] = rhMedian(col); }
+  return out;
+}
+function rhTemplate(rows, fs, pre) {
+  let t = rhMedianRow(rows);
+  for (let it = 0; it < 2 && t; it++) {
+    const c = rows.map(r => rhCorr(r, t, fs, pre)), cut = rhPercentile(c, 40);
+    const chosen = rows.filter((_, i) => c[i] >= cut);
+    if (chosen.length < 8) break;
+    t = rhMedianRow(chosen);
+  }
+  return t;
+}
+function rhAmpSnr(row, fs, pre) {
+  let hi = -Infinity, lo = Infinity;
+  for (let j = pre - Math.round(0.06 * fs); j <= pre + Math.round(0.08 * fs); j++) { hi = Math.max(hi, row[j]); lo = Math.min(lo, row[j]); }
+  const amp = hi - lo, k = Math.max(3, Math.round(0.04 * fs)), resid = [];
+  for (const part of [row.subarray(0, pre - Math.round(0.08 * fs)), row.subarray(pre + Math.round(0.12 * fs))]) {
+    if (part.length <= k) continue;
+    const ma = rhMovingMean(part, k);
+    for (let i = 0; i < part.length; i++) resid.push(part[i] - ma[i]);
+  }
+  const med = rhMedian(resid);
+  const noise = 1.4826 * rhMedian(resid.map(v => Math.abs(v - med)));
+  return { amp, snr: amp / Math.max(noise, 1e-4) };
+}
+function rhBeats(wide, fs, r, bad) {
+  const pre = Math.round(0.25 * fs), post = Math.round(0.45 * fs), nb = r.length;
+  const rows = r.map(p => rhWindow(wide, p, pre, post));
+  const rrPrev = r.map((p, i) => i ? (p - r[i - 1]) / fs : NaN).map(v => v > 10 ? NaN : v);
+  // RR across excluded signal is not a heartbeat interval.
+  for (let i = 1; i < nb; i++) { for (let j = r[i - 1]; j <= r[i]; j++) if (bad[j]) { rrPrev[i] = NaN; break; } }
+  const rrNext = rrPrev.slice(1).concat([NaN]);
+  const rrLocal = rrPrev.map((_, i) => rhMedian(rrPrev.slice(Math.max(0, i - 5), i + 6)));
+  const ampSnr = rows.map(row => rhAmpSnr(row, fs, pre));
+  const edges = rows.map(row => rhEdges(row, fs, pre));
+  const width = edges.map(e => e ? e.off - e.on : NaN);
+  const usable = rows.filter((row, i) => row.every(Number.isFinite) && ampSnr[i].snr >= RH.MIN_SNR);
+  const tmpl = usable.length >= 12 ? rhTemplate(usable, fs, pre) : (usable.length >= 3 ? rhMedianRow(usable) : null);
+  const tEdges = tmpl ? rhEdges(tmpl, fs, pre) : null;
+  const tWidth = tEdges ? tEdges.off - tEdges.on : NaN;
+  const corr = rows.map(row => tmpl ? rhCorr(row, tmpl, fs, pre) : NaN);
+  // "Clean enough" and "plausible size" against this strip's beats that match the template.
+  const typSnr = [], typAmp = [];
+  for (let i = 0; i < nb; i++) if (corr[i] >= 0.90) { typSnr.push(ampSnr[i].snr); typAmp.push(ampSnr[i].amp); }
+  const snrRef = typSnr.length >= 8 ? rhMedian(typSnr) : NaN, ampRef = typAmp.length >= 8 ? rhMedian(typAmp) : NaN;
+  const unreadable = r.map((p, i) => {
+    for (let j = Math.max(0, p - pre); j <= Math.min(wide.length - 1, p + post); j++) if (bad[j]) return true;
+    return !Number.isFinite(ampSnr[i].snr) || ampSnr[i].snr < RH.MIN_SNR || !Number.isFinite(corr[i]);
+  });
+
+  // Sequential, as beats.label_beats: the reference is the mean of the last 16 intervals between two
+  // NORMAL beats, so ectopy never shortens the rhythm it is judged against.
+  const sLimit = 1 - RH.SVPB_PREM, label = new Array(nb), rrRef = new Array(nb).fill(NaN), hist = [];
+  let since = 0, prev = '';
+  const push = v => { hist.push(v); if (hist.length > RH.REF_INTERVALS) hist.shift(); since = 0; };
+  for (let i = 0; i < nb; i++) {
+    const rr = rrPrev[i];
+    const ref = hist.length >= RH.REF_MIN ? hist.reduce((a, b) => a + b, 0) / hist.length : rrLocal[i];
+    rrRef[i] = ref;
+    const have = Number.isFinite(rr) && Number.isFinite(ref) && ref > 0;
+    const c = corr[i], snr = ampSnr[i].snr, amp = ampSnr[i].amp;
+    const wider = (width[i] - tWidth) > RH.WIDTH_EXCESS && c < RH.CORR_WIDTH_CORROBORATE;
+    const differs = c < RH.CORR_ABNORMAL, abnormal = differs || wider;
+    const cleanS = snr >= Math.max(RH.V_MIN_SNR, RH.V_SNR_FRACTION * snrRef);
+    const clean = cleanS && amp >= RH.V_AMP_MIN * ampRef && amp <= RH.V_AMP_MAX * ampRef;
+    const clearlyWide = wider && differs && snr >= RH.V_WIDE_ALONE_SNR * snrRef;
+    let lab;
+    if (unreadable[i]) lab = 'X';
+    else if (Number.isFinite(rr) && rr < RH.MIN_ECTOPIC_RR && (abnormal || (Number.isFinite(ref) && rr < sLimit * ref))) lab = 'U';
+    else if (abnormal) {
+      let timing = false;
+      if (have) {
+        const nx = rrNext[i];
+        const comp = Number.isFinite(nx) && rr < 0.95 * ref && nx > 1.10 * ref && rr + nx >= RH.COMPENSATORY * ref;
+        timing = rr < RH.V_PREMATURE * ref || comp || (differs && prev === 'V' && rr < 1.10 * ref);
+      }
+      lab = differs ? (clean && (timing || clearlyWide) ? 'V' : 'U') : (clean && timing ? 'V' : 'U');
+    } else if (have && rr < sLimit * ref) {
+      const before = i > 0 ? rrPrev[i - 1] : NaN;
+      const abrupt = (Number.isFinite(before) && rr < RH.S_ABRUPT * before) || prev === 'S';
+      lab = !cleanS ? 'U' : (abrupt ? 'S' : 'N');
+    } else lab = 'N';
+    label[i] = lab;
+    if (lab === 'N' && prev === 'N' && have && rr > 0.6 * ref && rr < 1.6 * ref) push(rr);
+    else if (lab === 'N' && prev === 'N' && Number.isFinite(rr) && hist.length < RH.REF_MIN) push(rr);
+    else if (++since > RH.REF_RESEED && Number.isFinite(rrLocal[i])) { hist.length = 0; hist.push(rrLocal[i]); since = 0; }
+    prev = lab;
+  }
+  // Consecutive V beats must look like one another (morphology.review_ventricular_runs); a run among
+  // unknown or unreadable beats must look very alike. The template-level promotion of the PC tool
+  // needs a whole recording's templates and is not done here.
+  const noisy = label.map(l => l === 'U' || l === 'X');
+  for (let s = 0; s < nb;) {
+    if (label[s] !== 'V') { s++; continue; }
+    let e = s; while (e < nb && label[e] === 'V') e++;
+    if (e - s >= 2) {
+      const sims = []; for (let k = s; k < e - 1; k++) sims.push(rhCorr(rows[k + 1], rows[k], fs, pre));
+      let around = 0;
+      for (let k = Math.max(0, s - RH.RUN_NEIGHBOURS); k < s; k++) around += noisy[k];
+      for (let k = e; k < Math.min(nb, e + RH.RUN_NEIGHBOURS); k++) around += noisy[k];
+      const need = around >= RH.RUN_NOISY_NEIGHBOURS ? RH.RUN_NOISY_CORR : RH.RUN_CORR;
+      if (!(rhMedian(sims) >= need)) for (let k = s; k < e; k++) label[k] = 'U';
+    }
+    s = e;
+  }
+  return { r, fs, pre, post, rows, rrPrev, rrNext, rrRef, rrLocal, amp: ampSnr.map(a => a.amp), snr: ampSnr.map(a => a.snr),
+           width, corr, label, tmpl, tWidth, tEdges, snrRef, ampRef };
+}
+function rhRecover(wide, fs, beats, bad) {
+  if (!beats.tmpl || beats.r.length < 10) return [];
+  const rr = beats.rrPrev, ref = rhMedian(rr);
+  if (!Number.isFinite(ref)) return [];
+  const pre = beats.pre, a = Math.round(0.10 * fs), b = Math.round(0.12 * fs), L = a + b + 1;
+  const core = beats.tmpl.slice(pre - a, pre + b + 1);
+  const mean = core.reduce((x, y) => x + y, 0) / L;
+  let norm = 0; for (let i = 0; i < L; i++) { core[i] -= mean; norm += core[i] * core[i]; }
+  norm = Math.sqrt(norm); if (!(norm > 0)) return [];
+  const typical = rhMedian(beats.amp.filter((_, i) => beats.label[i] === 'N'));
+  const margin = Math.round(0.25 * fs), found = [];
+  for (let i = 1; i < beats.r.length; i++) {
+    if (!(rr[i] > Math.max(RH.RECOVER_MIN_GAP_S, RH.RECOVER_RR_FACTOR * ref))) continue;
+    const s0 = beats.r[i - 1] + margin, s1 = beats.r[i] - margin;
+    if (s1 - s0 < 2 || s0 - a < 0 || s1 + b >= wide.length) continue;
+    let anyBad = false; for (let j = s0; j <= s1; j++) if (bad[j]) { anyBad = true; break; }
+    if (anyBad) continue;
+    const cands = [];
+    for (let p = s0; p <= s1; p++) {
+      let m = 0, hi = -Infinity, lo = Infinity;
+      for (let t = 0; t < L; t++) { const v = wide[p - a + t]; m += v; hi = Math.max(hi, v); lo = Math.min(lo, v); }
+      m /= L;
+      let dot = 0, nn = 0;
+      for (let t = 0; t < L; t++) { const v = wide[p - a + t] - m; dot += v * core[t]; nn += v * v; }
+      const ncc = dot / Math.max(Math.sqrt(nn) * norm, 1e-12);
+      if (ncc > RH.RECOVER_CORR && (hi - lo) > RH.RECOVER_MIN_AMP * typical) cands.push([ncc, p]);
+    }
+    cands.sort((x, y) => y[0] - x[0]);
+    const accepted = [];
+    for (const [, p] of cands) if (accepted.every(q => Math.abs(q - p) >= Math.round(0.25 * fs))) accepted.push(p);
+    found.push(...accepted);
+  }
+  return found;
+}
+
+// ---- strip determination (rhythm.py) -------------------------------------
+function rhTprBand(n) {
+  const sd = Math.sqrt((16 * n - 29) / 90) / (n - 2);
+  return [2 / 3 - RH.AF_TPR_Z * sd, 2 / 3 + RH.AF_TPR_Z * sd];
+}
+function rhAfMetrics(rrIn) {
+  const rr = rhFinite(rrIn);
+  if (rr.length < RH.AF_MIN_RR) return { ok: false, n: rr.length };
+  const trim = rr.length >= 16 ? 2 : 1;
+  const order = rr.map((v, i) => [v, i]).sort((p, q) => p[0] - q[0]);
+  const drop = new Set(order.slice(0, trim).map(p => p[1]).concat(order.slice(-trim).map(p => p[1])));
+  const x = rr.filter((_, i) => !drop.has(i));
+  const mean = x.reduce((p, q) => p + q, 0) / x.length;
+  let d2 = 0; for (let i = 1; i < x.length; i++) d2 += (x[i] - x[i - 1]) ** 2;
+  const rmssd = Math.sqrt(d2 / (x.length - 1)), nrmssd = rmssd / mean;
+  let tp = 0; for (let i = 1; i < x.length - 1; i++) if ((x[i] - x[i - 1]) * (x[i] - x[i + 1]) > 0) tp++;
+  const tpr = tp / (x.length - 2);
+  const counts = new Array(25).fill(0);
+  for (const v of x) {
+    const c = Math.min(Math.max(v, mean * 0.5), mean * 1.5);
+    counts[Math.min(24, Math.floor((c / mean - 0.5) / 0.04))]++;
+  }
+  let she = 0; for (const c of counts) if (c) { const p = c / x.length; she -= p * Math.log(p); }
+  she /= Math.log(16);
+  return { ok: true, n: x.length, mean, rmssd, nrmssd, tp, tpr, she, band: rhTprBand(x.length) };
+}
+function rhMedianBeat(wide, fs, rs, preS, postS) {
+  if (rs.length < 4) return null;
+  const step = Math.max(1, Math.floor(rs.length / 40)), pre = Math.round(preS * fs), post = Math.round(postS * fs);
+  const rows = []; for (let i = 0; i < rs.length; i += step) rows.push(rhWindow(wide, rs[i], pre, post));
+  return { beat: rhMedianRow(rows), pre };
+}
+function rhPWave(wide, fs, rs) {
+  const m = rhMedianBeat(wide, fs, rs, 0.35, 0.05); if (!m) return NaN;
+  const seg = m.beat.slice(m.pre - Math.round(0.30 * fs), m.pre - Math.round(0.09 * fs) + 1);
+  if (seg.length < 3 || !seg.every(Number.isFinite)) return NaN;
+  let worst = 0;
+  for (let i = 0; i < seg.length; i++) {
+    const line = seg[0] + (seg[seg.length - 1] - seg[0]) * i / (seg.length - 1);
+    worst = Math.max(worst, Math.abs(seg[i] - line));
+  }
+  return worst;
+}
+function rhClassify(wide, fs, beats, quality, sessionPRef = null) {
+  const lab = beats.label, n = lab.length;
+  // U beats are counted but carry no rhythm; an interval that begins or ends on one is not used.
+  const nx = lab.filter(l => l === 'X').length, nu = lab.filter(l => l === 'U').length;
+  const good = lab.map(l => l !== 'X' && l !== 'U'), prevGood = i => i > 0 && good[i - 1];
+  const nGood = good.filter(Boolean).length;
+  let nv = lab.filter(l => l === 'V').length, ns = lab.filter(l => l === 'S').length;
+  const rrAll = beats.rrPrev.filter((v, i) => good[i] && prevGood(i) && Number.isFinite(v));
+  const rrClean = beats.rrPrev.filter((v, i) => good[i] && prevGood(i) && lab[i] !== 'V' && !(i && lab[i - 1] === 'V') && Number.isFinite(v));
+  const medRR = rhMedian(rrAll), hr = Number.isFinite(medRR) ? 60 / medRR : NaN;
+  const nR = beats.r.filter((_, i) => lab[i] === 'N');
+  const mb = rhMedianBeat(wide, fs, nR, 0.25, 0.25);
+  const qEdges = mb && mb.beat.every(Number.isFinite) ? rhEdges(mb.beat, fs, mb.pre) : null;
+  const qrs = qEdges ? qEdges.off - qEdges.on : NaN;
+  const af = rhAfMetrics(rrClean);
+  const tags = [];
+  let label, pAmp = NaN, afIrregular = false;
+  if (quality.badFraction > RH.UNREADABLE_BAD || (n && nx / n > RH.UNREADABLE_BEATS)) {
+    label = RH_UNREAD;
+    tags.push(quality.low.some(Boolean) && !quality.noisy.some(Boolean)
+      ? 'low signal: electrode contact, or asystole if the trace is flat - check the strip'
+      : 'poor signal');
+  } else if (nGood < 4) {
+    label = RH_UNREAD;
+    if (quality.badFraction < 0.1) tags.push('no QRS detected on a clean signal - check the strip');
+  } else {
+    afIrregular = af.ok && af.nrmssd > RH.AF_NRMSSD && af.tpr >= af.band[0] && af.tpr <= af.band[1] && af.she > RH.AF_SHE;
+    let isAf = afIrregular;
+    if (isAf) {
+      pAmp = rhPWave(wide, fs, nR);
+      const qAmp = rhMedian(beats.amp);
+      // Against this session's own sinus P wave when there is one (rhythm.py P_REF_FRACTION): a tall-QRS
+      // lead with a normal 0.08 mV P wave otherwise read sinus arrhythmia as AF.
+      const present = Number.isFinite(sessionPRef)
+        ? pAmp >= Math.max(RH.P_FLOOR, RH.P_REF_FRACTION * sessionPRef)
+        : pAmp > Math.max(RH.P_WAVE_MIN, 0.05 * qAmp);
+      if (Number.isFinite(pAmp) && present) { isAf = false; tags.push('irregular RR but P waves present'); }
+    }
+    if (isAf) { label = RH_AF; for (let i = 0; i < n; i++) if (lab[i] === 'S') lab[i] = 'N'; ns = 0; }
+    else if (Number.isFinite(qrs) && qrs > RH.WIDE_QRS + RH.WIDE_GUARD) label = RH_WIDE;
+    else if (nv) label = RH_PVC;
+    else if (ns) label = RH_SVE;
+    else if (hr < RH.BRADY) label = RH_BRADY;
+    else if (hr > RH.TACHY) label = RH_TACHY;
+    else label = RH_NSR;
+    if (label !== RH_BRADY && label !== RH_TACHY && Number.isFinite(hr)) {
+      if (hr < RH.BRADY) tags.push('rate < 50 bpm'); else if (hr > RH.TACHY) tags.push('rate > 100 bpm');
+    }
+    if (nv && label !== RH_PVC) tags.push(`${nv} PVC`);
+    if (ns && label !== RH_SVE) tags.push(`${ns} SVE`);
+    if (label !== RH_WIDE && Number.isFinite(qrs) && qrs > RH.WIDE_QRS) tags.push(`QRS ${qrs.toFixed(0)} ms: borderline, verify on the strip`);
+  }
+  const prem = beats.rrPrev.map((v, i) => v / beats.rrRef[i]).filter(Number.isFinite);
+  // A regular, clean strip teaches the session what this person's sinus P wave looks like.
+  const nN = lab.filter(l => l === 'N').length;
+  const pRegular = (label !== RH_UNREAD && af.ok && af.nrmssd < RH.P_REF_REGULAR && quality.badFraction <= 0.1
+                    && n >= RH.AF_MIN_RR && nN >= 0.9 * n) ? rhPWave(wide, fs, nR) : NaN;
+  return { label, tags, hr, medRR, nv, ns, nx, nu, nGood, qrs, qEdges, medianBeat: mb, af, afIrregular, pAmp, pRegular,
+           pRef: Number.isFinite(sessionPRef) ? sessionPRef : NaN,
+           minPrem: prem.length ? Math.min(...prem) : NaN,
+           minCorr: Math.min(...beats.corr.filter(Number.isFinite)) };
+}
+
+// Pure: no DOM, no state. The test harness calls this directly.
+function rhAnalyseWindow(mv, fs, sessionRef = null, sessionPRef = null) {
+  const wide = rhBandpass(mv, fs, 0.5, 40);
+  const quality = rhQuality(wide, fs, sessionRef);
+  let r = rhDetect(wide, fs);
+  let beats = rhBeats(wide, fs, r, quality.bad);
+  const extra = rhRecover(wide, fs, beats, quality.bad);
+  if (extra.length) {
+    r = Array.from(new Set(r.concat(extra))).sort((x, y) => x - y);
+    beats = rhBeats(wide, fs, r, quality.bad);
+  }
+  return Object.assign(rhClassify(wide, fs, beats, quality, sessionPRef), { wide, beats, quality, fs, recovered: extra.length });
+}
+
+// ---- rendering -------------------------------------------------------------
+function renderRhythm() {
+  if (!$('rhythmLabel')) return;
+  const now = performance.now();
+  if (rhythmState.result && now - rhythmState.lastAt < RH.UPDATE_MS) return;
+  const fs = currentSps || 500, have = analysisHistory.length;
+  rhythmState.lastAt = now;
+  const idle = why => {
+    setText('rhythmLabel', '—'); $('rhythmLabel').className = '';
+    ['rhythmHr', 'rhythmEctopy', 'rhythmQrs'].forEach(id => setText(id, '—'));
+    setText('rhythmTags', why);
+    for (const id of ['rhythmStripCanvas', 'rhythmBeatCanvas']) {
+      const sf = prepareAnalysisCanvas(id); if (sf) hrvEmpty(sf.ctx, sf.width, sf.height, why);
+    }
+    const host = $('rhythmDerivations'); if (host) host.innerHTML = '';
+  };
+  const mode = describeActiveMode(1);
+  if (!mode.powered || mode.mux !== 0) { idle('CH2 is not on its ECG electrode input, so there is no rhythm to read.'); return; }
+  if (have < RH.MIN_S * fs) { idle(`Collecting ECG: ${(have / fs).toFixed(0)} of ${RH.MIN_S} s needed.`); return; }
+
+  const snap = analysisHistory.latest(Math.min(Math.round(RH.WINDOW_S * fs), have));
+  const mv = new Float64Array(snap.count);
+  for (let i = 0; i < snap.count; i++) mv[i] = adcToInputMv(snap.ch2[i], 1);
+  const sessionRef = rhythmState.refPeaks.length >= 15 ? rhMedian(rhythmState.refPeaks) : null;
+  const pMed = rhythmState.pRefs.length >= 3 ? rhMedian(rhythmState.pRefs) : NaN;
+  const sessionPRef = pMed >= RH.P_FLOOR ? pMed : null;
+  const t0 = performance.now();
+  const res = rhAnalyseWindow(mv, fs, sessionRef, sessionPRef);
+  res.costMs = performance.now() - t0;
+  rhythmState.result = res;
+  if (Number.isFinite(res.pRegular)) {
+    rhythmState.pRefs.push(res.pRegular);
+    if (rhythmState.pRefs.length > 150) rhythmState.pRefs.shift();
+  }
+  // Only healthy strips teach the session what "usual amplitude" is; a failing
+  // stretch must not drag the reference down to meet itself.
+  if (res.label !== RH_UNREAD && Number.isFinite(res.quality.ownRef)) {
+    rhythmState.refPeaks.push(res.quality.ownRef);
+    if (rhythmState.refPeaks.length > 150) rhythmState.refPeaks.shift();
+  }
+
+  const lab = $('rhythmLabel');
+  lab.textContent = res.label; lab.className = RH_TINT[res.label] || '';
+  setText('rhythmHr', Number.isFinite(res.hr) ? `${res.hr.toFixed(0)} bpm` : '—');
+  setText('rhythmEctopy', `PVC ${res.nv} · SVE ${res.ns}${res.nu ? ` · unknown ${res.nu}` : ''}${res.nx ? ` · ? ${res.nx}` : ''}`);
+  setText('rhythmQrs', Number.isFinite(res.qrs) ? `${res.qrs.toFixed(0)} ms` : '—');
+  setText('rhythmTags', res.tags.length ? res.tags.join(' · ') : 'Nothing further in this strip.');
+  setText('rhythmMeta', `Last ${(snap.count / fs).toFixed(0)} s · ${res.beats.r.length} beats · `
+    + `${res.recovered ? `${res.recovered} recovered by template search · ` : ''}`
+    + `${res.costMs.toFixed(0)} ms to compute · screening aid, not a diagnosis`);
+  renderRhythmDerivations(res);
+  drawRhythmStrip(res);
+  drawRhythmBeat(res);
+}
+
+function renderRhythmDerivations(res) {
+  const host = $('rhythmDerivations'); if (!host) return;
+  const f = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const af = res.af, rows = [];
+  rows.push({ title: 'Heart rate', ok: Number.isFinite(res.hr),
+    out: `${f(res.hr, 0)} bpm`,
+    sym: 'HR = 60 / median(RR)',
+    num: `60 / <b>${f(res.medRR, 3)}</b> s = <b>${f(res.hr, 0)}</b> bpm`,
+    why: `Bradycardia below ${RH.BRADY}, tachycardia above ${RH.TACHY}. Median, so one ectopic interval does not move it.` });
+  rows.push({ title: 'Prematurity (earliest beat)', ok: Number.isFinite(res.minPrem),
+    out: f(res.minPrem, 2),
+    sym: 'P<sub>i</sub> = RR<sub>i</sub> / mean(16 preceding normal-to-normal RR)',
+    num: `min P = <b>${f(res.minPrem, 2)}</b> &nbsp; (SVE if &lt; ${(1 - RH.SVPB_PREM).toFixed(2)} and &lt; ${RH.S_ABRUPT} × the RR before)`,
+    why: 'Normal shape, 25 % early and abrupt is S (HScribe prematurity). Abnormal shape is V only with early timing, '
+       + 'a compensatory pause or a clean wide QRS; otherwise U, unknown - usually noise.' });
+  rows.push({ title: 'Beat shape (least similar beat)', ok: Number.isFinite(res.minCorr),
+    out: f(res.minCorr, 2),
+    sym: 'r = corr(beat, dominant beat) on −100 … +120 ms, best of ±20 ms lag',
+    num: `min r = <b>${f(res.minCorr, 2)}</b> &nbsp; (abnormal if &lt; ${RH.CORR_ABNORMAL})`,
+    why: 'Correlation ignores amplitude, so a smaller or larger beat of the same shape still scores near 1.' });
+  rows.push({ title: 'QRS width (median beat)', ok: Number.isFinite(res.qrs),
+    out: `${f(res.qrs, 0)} ms`,
+    sym: 'QRS = end − onset, edges where slope &lt; 15 % and curvature &lt; 8 % of peak for ≥ 10 ms',
+    num: res.qEdges ? `<b>${f(res.qEdges.off, 0)}</b> − (<b>${f(res.qEdges.on, 0)}</b>) = <b>${f(res.qrs, 0)}</b> ms` : '—',
+    why: `Wide QRS needs over ${RH.WIDE_QRS + RH.WIDE_GUARD} ms: ${RH.WIDE_QRS} ms plus ${RH.WIDE_GUARD} ms for one lead's edge scatter.` });
+  if (af.ok) {
+    rows.push({ title: 'AF test 1 · nRMSSD', ok: af.nrmssd > RH.AF_NRMSSD,
+      out: f(af.nrmssd, 3),
+      sym: 'nRMSSD = √mean(ΔRR²) / mean(RR)',
+      num: `<b>${f(af.rmssd * 1000, 0)}</b> ms / <b>${f(af.mean * 1000, 0)}</b> ms = <b>${f(af.nrmssd, 3)}</b> &nbsp; (&gt; ${RH.AF_NRMSSD}?)`,
+      why: 'How much each interval differs from the one before, relative to the rate.' });
+    rows.push({ title: 'AF test 2 · turning points', ok: af.tpr >= af.band[0] && af.tpr <= af.band[1],
+      out: f(af.tpr, 2),
+      sym: 'TPR = turning points / (n − 2), random if within 2/3 ± 2.5·√((16n−29)/90)/(n−2)',
+      num: `<b>${af.tp}</b> / ${af.n - 2} = <b>${f(af.tpr, 2)}</b> &nbsp; in [${f(af.band[0], 2)}, ${f(af.band[1], 2)}]?`,
+      why: 'Breathing makes RR rise and fall smoothly (few turns); ectopy alternates (too many); AF is random.' });
+    rows.push({ title: 'AF test 3 · RR entropy', ok: af.she > RH.AF_SHE,
+      out: f(af.she, 2),
+      sym: 'ShE = −Σ p·ln p / ln 16, bins of 4 % of mean RR',
+      num: `ShE = <b>${f(af.she, 2)}</b> &nbsp; (&gt; ${RH.AF_SHE}?)`,
+      why: 'Fixed-width bins measure how spread the intervals are, not the shape of their histogram.' });
+    rows.push({ title: 'AF veto · P wave', ok: !(res.afIrregular && res.label !== RH_AF),
+      out: Number.isFinite(res.pAmp) ? `${f(res.pAmp, 3)} mV` : (res.afIrregular ? '—' : 'not needed'),
+      sym: 'P = max |median beat − baseline| on −300 … −90 ms',
+      num: Number.isFinite(res.pAmp)
+        ? (Number.isFinite(res.pRef)
+            ? `<b>${f(res.pAmp, 3)}</b> mV vs ${RH.P_REF_FRACTION} × this session's sinus P <b>${f(res.pRef, 3)}</b> mV`
+            : `<b>${f(res.pAmp, 3)}</b> mV vs ${RH.P_WAVE_MIN} mV (no session P reference yet)`)
+        : 'Only measured when all three RR tests say irregular.',
+      why: 'Irregular RR with an organised P wave is sinus arrhythmia or ectopy, not AF.' });
+  } else {
+    rows.push({ title: 'AF tests', ok: false, out: 'n/a', sym: 'needs ≥ 12 clean RR intervals',
+      num: `${af.n} available in this strip`, why: 'Ectopic beats and the interval after them are left out.' });
+  }
+  rows.push({ title: 'Signal quality', ok: res.quality.badFraction <= RH.UNREADABLE_BAD,
+    out: `${f(100 * (1 - res.quality.badFraction), 0)} % readable`,
+    sym: 'per 2 s: HF = 1.4826·MAD(x − MA<sub>40 ms</sub>) vs 0.10·A; range vs 4·A; amplitude vs 0.20·A',
+    num: `A = <b>${f(res.quality.ref, 2)}</b> mV ${rhythmState.refPeaks.length >= 15 ? '(this session)' : '(this strip)'} · `
+       + `worst HF <b>${f(res.quality.hfWorst, 3)}</b>·A · low-signal segments <b>${res.quality.low.filter(Boolean).length}</b>`,
+    why: 'Judged before any beat is, so beats found in noise cannot become arrhythmia.' });
+  host.innerHTML = rows.map(r => `<div class="deriv${r.ok ? '' : ' stale'}">
+      <div class="deriv-hd"><h5>${r.title}</h5><span class="deriv-out${r.ok ? '' : ' warn'}">${r.out}</span></div>
+      <div class="deriv-sym">${r.sym}</div><div class="deriv-num">${r.num}</div><div class="deriv-why">${r.why}</div>
+    </div>`).join('');
+}
+
+function drawRhythmStrip(res) {
+  const surface = prepareAnalysisCanvas('rhythmStripCanvas'); if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface, fs = res.fs, wide = res.wide;
+  const span = Math.min(wide.length, Math.round(10 * fs)), start = wide.length - span;
+  const seg = wide.subarray(start);
+  const lo = Math.min(-0.8, rhPercentile(seg, 0.5) - 0.2), hi = Math.max(1.2, rhPercentile(seg, 99.5) + 0.3);
+  const T = 16, B = 14, X = i => (i / span) * w, Y = v => T + (hi - v) / (hi - lo) * (h - T - B);
+  g.strokeStyle = 'rgba(240,120,120,.10)'; g.lineWidth = 1;
+  for (let s = 0; s <= 10; s += 0.2) { const x = Math.round(X(s * fs)) + 0.5; g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); }
+  for (let v = Math.ceil(lo * 2) / 2; v <= hi; v += 0.5) { const y = Math.round(Y(v)) + 0.5; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+  for (let i = 0; i < span; i++) {
+    if (res.quality.bad[start + i]) { g.fillStyle = 'rgba(158,158,158,.18)'; g.fillRect(X(i), T, Math.max(1, w / span), h - T - B); }
+  }
+  g.beginPath();
+  const step = Math.max(1, Math.floor(span / w));
+  for (let i = 0; i < span; i += step) {
+    let mn = Infinity, mx = -Infinity;
+    for (let j = i; j < Math.min(span, i + step); j++) { mn = Math.min(mn, seg[j]); mx = Math.max(mx, seg[j]); }
+    const x = X(i); if (i === 0) g.moveTo(x, Y(mn)); else g.lineTo(x, Y(mn)); g.lineTo(x, Y(mx));
+  }
+  g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.2; g.stroke();
+  g.font = '700 11px ui-monospace, monospace'; g.textAlign = 'center';
+  res.beats.r.forEach((p, i) => {
+    if (p < start) return;
+    const x = X(p - start), l = res.beats.label[i];
+    if (l === 'N') { g.strokeStyle = 'rgba(146,176,210,.7)'; g.beginPath(); g.moveTo(x, 3); g.lineTo(x, 10); g.stroke(); }
+    else { g.fillStyle = l === 'V' ? 'rgb(255,110,110)' : l === 'S' ? 'rgb(255,197,61)' : l === 'U' ? 'rgb(192,132,252)' : 'rgb(170,170,170)'; g.fillText(l === 'X' ? '?' : l, x, 12); }
+  });
+  g.textAlign = 'left'; g.fillStyle = 'rgba(146,176,210,.75)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillText('last 10 s · 0.5–40 Hz · grid 0.2 s / 0.5 mV · grey = excluded', 4, h - 3);
+}
+
+function drawRhythmBeat(res) {
+  const surface = prepareAnalysisCanvas('rhythmBeatCanvas'); if (!surface) return;
+  const { ctx: g, width: w, height: h } = surface;
+  const mb = res.medianBeat;
+  if (!mb || !mb.beat.every(Number.isFinite)) { hrvEmpty(g, w, h, 'Not enough normal beats for a median beat yet.'); return; }
+  const fs = res.fs, beat = mb.beat, pre = mb.pre, L = beat.length;
+  let lo = Infinity, hi = -Infinity; for (const v of beat) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  lo -= 0.15; hi += 0.15;
+  const Lm = 30, R = 8, T = 10, B = 18;
+  const X = ms => Lm + (ms + pre * 1000 / fs) / (L * 1000 / fs) * (w - Lm - R), Y = v => T + (hi - v) / (hi - lo) * (h - T - B);
+  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1; g.fillStyle = 'rgba(146,176,210,.7)'; g.font = '600 9px ui-monospace, monospace';
+  for (let ms = -200; ms <= 200; ms += 100) { const x = Math.round(X(ms)) + 0.5; g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); g.fillText(`${ms}`, x - 8, h - 5); }
+  g.beginPath();
+  for (let i = 0; i < L; i++) { const x = X((i - pre) * 1000 / fs), y = Y(beat[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.strokeStyle = 'rgb(230,236,245)'; g.lineWidth = 1.8; g.stroke();
+  if (res.qEdges) {
+    g.setLineDash([3, 3]); g.strokeStyle = 'rgb(240,158,74)'; g.lineWidth = 1.2;
+    for (const ms of [res.qEdges.on, res.qEdges.off]) { const x = X(ms); g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); }
+    g.setLineDash([]); g.fillStyle = 'rgb(240,158,74)'; g.font = '700 10px ui-monospace, monospace';
+    g.fillText(`QRS ${res.qrs.toFixed(0)} ms`, X(res.qEdges.off) + 4, T + 10);
+  }
+  g.fillStyle = 'rgba(146,176,210,.75)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillText('median of normal beats · ms from fiducial · orange: where the QRS edges were placed', Lm, T + 2);
 }
 
 function renderMathSpectrum(spec) {
