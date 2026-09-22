@@ -74,8 +74,9 @@ each recording into its footer, and the file inspector shows them together with 
 stop reason and the measured sample rate - so a recording that ended on LOW BATTERY
 says at what voltage without taking the card out.
 
-Raw traces are in input-referred millivolts (ADC codes are one click away under
-*Raw units*), and respiration has its own window: a quarter of the ECG speed by
+Raw traces show input-referred millivolts on the left axis and the ADC code on the
+right, and the readout gives both (`540,300 = 25.9782 mV`); the chart header states
+the LSB, 48.08 nV at the 2.42 V reference and gain 6. Respiration has its own window: a quarter of the ECG speed by
 default, the 6.25 mm/s bedside monitors use, because a breath is 20-70 µV and takes
 3-10 s - a 5-second ECG window never showed more than one of them.
 

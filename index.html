@@ -478,6 +478,9 @@ body.splitting{cursor:col-resize;user-select:none}
 
 .chart-body{flex:1 1 auto;display:flex;gap:var(--sp-2);min-height:0}
 .yaxis{width:48px;display:flex;flex-direction:column;justify-content:space-between;text-align:right;font:400 var(--t-micro) var(--mono);color:var(--ink-low);padding:var(--seam) 0;flex-shrink:0;letter-spacing:.01em}
+/* The same grid read in ADC codes, right of the raw traces: mV = code x LSB on screen. */
+.yaxis-code{display:none;width:52px;text-align:left;padding-left:6px;opacity:.78}
+.yaxis-code.on{display:flex}
 /* The well is the one genuinely recessed surface in the app: inner
    shadow at the top, no highlight anywhere, sunk below the panel. */
 .canvas-wrap{
@@ -1135,10 +1138,11 @@ body:has(.vital-tag.alert) .app-header{
           <option value="0">Show as processed</option>
         </select>
       </label>
-      <label class="field" title="Raw traces and readouts in input-referred millivolts, or as the ADC delivered them"><span>Raw units</span>
-        <select id="rawUnits" onchange="applyRawUnits()">
-          <option value="mv" selected>mV (input-referred)</option>
-          <option value="adc">ADC code</option>
+      <label class="field" title="Raw traces: millivolts at the electrodes on the left axis, the code the ADC delivered on the right. mV = code × LSB"><span>Raw units</span>
+        <select id="rawDisplay" onchange="applyRawUnits()">
+          <option value="both" selected>mV + ADC code</option>
+          <option value="mv">mV only</option>
+          <option value="adc">ADC code only</option>
         </select>
       </label>
       <label class="field"><span>RESP bandwidth</span>
@@ -1210,17 +1214,18 @@ body:has(.vital-tag.alert) .app-header{
           <div class="chart-id">
             <span class="chart-index">1</span>
             <span class="chart-name" id="titleRawCh1" style="color:var(--sig-resp)">CH1 · RESPIRATION</span>
-            <span class="chart-unit" id="unitRawCh1">raw · mV</span>
+            <span class="chart-unit" id="unitRawCh1">raw · mV | ADC code</span>
             <span class="badge normal" id="badgeCh1Raw">NORMAL</span>
           </div>
           <div class="chart-readout">
-            <span class="readout" id="val1_ch1" style="color:var(--sig-resp)">0.0000 mV</span>
+            <span class="readout" id="val1_ch1" style="color:var(--sig-resp)">0 = 0.0000 mV</span>
             <button class="ghost-btn" title="Solo this trace" aria-label="Solo this trace" onclick="toggleSolo('card1_ch1')"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis1_ch1"></div>
           <div class="canvas-wrap"><canvas id="bg1_ch1"></canvas><canvas id="fg1_ch1"></canvas></div>
+          <div class="yaxis yaxis-code" id="yAxisCode_ch1" title="ADC code (LSB)"></div>
         </div>
       </article>
 
@@ -1258,17 +1263,18 @@ body:has(.vital-tag.alert) .app-header{
           <div class="chart-id">
             <span class="chart-index">3</span>
             <span class="chart-name" id="titleRawCh2" style="color:var(--sig-ecg)">CH2 · ECG</span>
-            <span class="chart-unit" id="unitRawCh2">raw · mV</span>
+            <span class="chart-unit" id="unitRawCh2">raw · mV | ADC code</span>
             <span class="badge normal" id="badgeCh2Raw">NORMAL</span>
           </div>
           <div class="chart-readout">
-            <span class="readout" id="val1_ch2" style="color:var(--sig-ecg)">0.0000 mV</span>
+            <span class="readout" id="val1_ch2" style="color:var(--sig-ecg)">0 = 0.0000 mV</span>
             <button class="ghost-btn" title="Solo this trace" aria-label="Solo this trace" onclick="toggleSolo('card1_ch2')"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis1_ch2"></div>
           <div class="canvas-wrap"><canvas id="bg1_ch2"></canvas><canvas id="fg1_ch2"></canvas></div>
+          <div class="yaxis yaxis-code" id="yAxisCode_ch2" title="ADC code (LSB)"></div>
         </div>
       </article>
 
@@ -5547,7 +5553,7 @@ function describeActiveMode(channel) {
     const alignMs = isCh1 ? 0 : rawAlignmentMs();
     return { channel, mux, powered:true, normal:true, badge:'NORMAL', badgeClass:'normal', unit:'mV',
       rawTitle:isCh1 ? 'CH1 · RESPIRATION' : 'CH2 · ECG',
-      rawUnit:alignMs >= 0.5 ? `${rawUnitText()} · held ${Math.round(alignMs)} ms to match` : rawUnitText(),
+      rawUnit:alignMs >= 0.5 ? `${rawUnitText(channel)} · held ${Math.round(alignMs)} ms to match` : rawUnitText(channel),
       processedTitle:isCh1 ? 'CH1 · RESP FILTERED' : 'CH2 · ECG FILTERED',
       processedUnit:isCh1 ? respFilterState.label : ecgFilterState.label,
       warning:(!isCh1 && ecgBaseline.enabled && !rawAlignEnabled)
@@ -5555,7 +5561,7 @@ function describeActiveMode(channel) {
         : '' };
   }
   const common = { channel, mux, powered:true, normal:false, badgeClass:mux === 5 ? 'test' : 'diag',
-    rawTitle:`${channelName} · ${muxOptions[mux][1].toUpperCase()}`, rawUnit:rawUnitText(), warning:'' };
+    rawTitle:`${channelName} · ${muxOptions[mux][1].toUpperCase()}`, rawUnit:rawUnitText(channel), warning:'' };
   if (mux === 1) return { ...common, badge:'INPUT SHORT', unit:'µV', processedTitle:`${channelName} · INPUT-REFERRED NOISE`, processedUnit:'µV', metricKind:'noise', convert:mv => mv*1000 };
   if (mux === 2) return { ...common, badge:'RLD MEASURE', unit:'mV', processedTitle:`${channelName} · RLDIN vs MID-SUPPLY`, processedUnit:'mV', metricKind:'rld', convert:mv => mv, trendHz:5 };
   if (mux === 3) return { ...common, badge:'SUPPLY', unit:'V',
@@ -5617,6 +5623,7 @@ function applyActiveModeConfiguration(force = false) {
   modeSettleRemaining = activeDisplayModes.map(m => Math.round(currentSps*(m.normal ? 0.15 : 0.30)));
   clearGraphs();
   activeDisplayModes.forEach((mode, index) => applyModeUi(index, mode));
+  updateRawScales();
   requestAnimationFrame(() => { CHARTS.forEach(c => c.resize()); applySweepSettings(); });
 }
 function formatModeNumber(value, unit) {
@@ -5908,6 +5915,8 @@ class TurboSweepChart {
     this.respiration = !!options.respiration;
     this.minSpan = options.minSpan || 0;         // smallest span the autoscaler may zoom into
     this.decim = 1; this.decimCount = 0; this.decimSum = 0;
+    this.codeAxisDiv = options.codeAxisId ? $(options.codeAxisId) : null;
+    this.codeAxisOn = false; this.codeAxisText = ''; this.lsbMv = 0;
     this.gridMode = 'clinical';
     this.paperMvSpan = 0;                        // 0 = autoscale, >0 = fixed mV span
     this.visibleSamples = 2500; this.scaleMode = 'fast'; this.scaleReady = false;
@@ -5983,6 +5992,13 @@ class TurboSweepChart {
     const decim = this.respiration ? Math.max(1, Math.floor(seconds*fs/Math.max(64, this.width*4))) : 1;
     if (decim !== this.decim) { this.decim = decim; this.decimCount = 0; this.decimSum = 0; }
     this.setScanSpeed(this.width*decim/(fs*seconds));
+  }
+  // The raw traces' second axis: the painted mV span divided by one LSB.
+  setCodeAxis(on) {
+    if (!this.codeAxisDiv) return;
+    const next = !!on;
+    this.codeAxisDiv.classList.toggle('on', next);
+    if (next !== this.codeAxisOn) { this.codeAxisOn = next; this.codeAxisText = ''; this.drawnScaleValid = false; }
   }
   setScaleMode(mode) { this.scaleMode = mode; this.scaleReady = false; this.lastScaleUpdate = 0; this.needsFullRepaint = true; }
   setGridMode(mode) { this.gridMode = mode; this.needsFullRepaint = true; this.drawGrid(); }
@@ -6138,6 +6154,17 @@ class TurboSweepChart {
       if (joined !== this.axisTextCache) {
         this.axisTextCache = joined;
         this.axisDiv.replaceChildren(...labels.map(t => {
+          const s = document.createElement('span'); s.textContent = t; return s;
+        }));
+      }
+    }
+    if (this.codeAxisDiv && this.codeAxisOn && this.lsbMv > 0) {
+      const stepCode = (this.drawnMax-this.drawnMin)/4/this.lsbMv, baseCode = this.drawnMin/this.lsbMv;
+      const labels = [4,3,2,1,0].map(k => formatAxisValue(baseCode + stepCode*k, stepCode));
+      const joined = labels.join('|');
+      if (joined !== this.codeAxisText) {
+        this.codeAxisText = joined;
+        this.codeAxisDiv.replaceChildren(...labels.map(t => {
           const s = document.createElement('span'); s.textContent = t; return s;
         }));
       }
@@ -6422,17 +6449,42 @@ function applySweepSettings() {
    delivered them. Only the display changes: saturation and lead-off checks
    keep reading codes. */
 const RESP_MIN_SPAN_MV = 0.02;
-let rawUnitsMv = true;
-function rawDisplayValue(adc, channel) { return rawUnitsMv ? adcToInputMv(adc, channel) : adc; }
+let rawDisplay = 'both';                      // 'both' | 'mv' | 'adc'
+const rawInMv = () => rawDisplay !== 'adc';
+// One LSB is the voltage of one ADC code at the channel's current gain and
+// reference - the same factor adcToInputMv() applies. 48.08 nV at 2.42 V / 6.
+function rawLsbMv(channel) { return adcToInputMv(1, channel); }
+function rawDisplayValue(adc, channel) { return rawInMv() ? adcToInputMv(adc, channel) : adc; }
 function formatRawReadout(adc, channel) {
-  return rawUnitsMv ? `${adcToInputMv(adc, channel).toFixed(4)} mV` : adc.toLocaleString();
+  if (rawDisplay === 'adc') return adc.toLocaleString();
+  const mv = `${adcToInputMv(adc, channel).toFixed(4)} mV`;
+  return rawDisplay === 'both' ? `${adc.toLocaleString()} = ${mv}` : mv;
 }
-function rawUnitText() { return rawUnitsMv ? 'raw · mV' : 'raw adc'; }
+function formatLsb(channel) { return `1 LSB = ${(rawLsbMv(channel)*1e6).toFixed(2)} nV`; }
+function rawUnitText(channel = 1) {
+  if (rawDisplay === 'adc') return `raw adc · ${formatLsb(channel)}`;
+  if (rawDisplay === 'mv') return 'raw · mV';
+  return `raw · mV | ADC code · ${formatLsb(channel)}`;
+}
+// Gain and reference come from the registers, so this runs whenever they may
+// have changed (applyActiveModeConfiguration) as well as on the unit choice.
+function updateRawScales() {
+  [chart1_ch1, chart1_ch2].forEach((c, channel) => {
+    if (!c) return;
+    c.lsbMv = rawLsbMv(channel);
+    c.setCodeAxis(rawDisplay === 'both');
+    const unit = $(channel === 0 ? 'unitRawCh1' : 'unitRawCh2');
+    if (unit) unit.title = `mV = code × LSB.  LSB = Vref / (gain × (2^23 − 1)) = `
+      + `${activeReferenceMv().toFixed(0)} mV / (${gainByCode[activeGainCode(channel)] || 6} × 8 388 607) `
+      + `= ${(c.lsbMv*1e6).toFixed(3)} nV.  Full scale ±${(c.lsbMv*8388607).toFixed(1)} mV.`;
+  });
+}
 function syncRawUnits() {
-  rawUnitsMv = ($('rawUnits')?.value || 'mv') !== 'adc';
-  [chart1_ch1, chart1_ch2].forEach(c => { if (c) { c.calibrated = rawUnitsMv; c.reset(); } });
+  rawDisplay = $('rawDisplay')?.value || 'both';
+  [chart1_ch1, chart1_ch2].forEach(c => { if (c) { c.calibrated = rawInMv(); c.reset(); } });
   // the floor is in the chart's own units, and a code is 48 nV at gain 6
-  if (chart1_ch1) chart1_ch1.minSpan = rawUnitsMv ? RESP_MIN_SPAN_MV : 0;
+  if (chart1_ch1) chart1_ch1.minSpan = rawInMv() ? RESP_MIN_SPAN_MV : 0;
+  updateRawScales();
 }
 function applyRawUnits() {
   syncRawUnits();
@@ -11976,7 +12028,7 @@ function exportAnalysisCsv() {
    ================================================================== */
 
 const PREF_KEY = 'hecg01.console.v3';
-const PREF_SELECTS = ['sweepSeconds','respSweep','rawUnits','gridMode','autoScaleMode','traceQuality','ecgFilterPreset','respFilterPreset','baselineMode','paperSpeed','paperGain','rateResponse','rawAlignToggle','traceStyle','uiTypeface'];
+const PREF_SELECTS = ['sweepSeconds','respSweep','rawDisplay','gridMode','autoScaleMode','traceQuality','ecgFilterPreset','respFilterPreset','baselineMode','paperSpeed','paperGain','rateResponse','rawAlignToggle','traceStyle','uiTypeface'];
 let prefsLoaded = false;
 
 let prefSaveTimer = null;
@@ -12220,9 +12272,9 @@ function initPalette() {
    18. BOOT
    ================================================================== */
 function boot() {
-  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV });
+  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV, codeAxisId:'yAxisCode_ch1' });
   chart3_ch1 = new TurboSweepChart('fg3_ch1','bg3_ch1','yAxis3_ch1',PALETTE.respFilt,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV });
-  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg,{ calibrated:true });
+  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg,{ calibrated:true, codeAxisId:'yAxisCode_ch2' });
   chart3_ch2 = new TurboSweepChart('fg3_ch2','bg3_ch2','yAxis3_ch2',PALETTE.ecgFilt,{ calibrated:true });
   CHARTS = [chart1_ch1, chart1_ch2, chart3_ch1, chart3_ch2];
 
