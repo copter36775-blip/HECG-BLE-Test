@@ -1135,12 +1135,26 @@ body:has(.vital-tag.alert) .app-header{
           <option value="0">Show as processed</option>
         </select>
       </label>
+      <label class="field" title="Raw traces and readouts in input-referred millivolts, or as the ADC delivered them"><span>Raw units</span>
+        <select id="rawUnits" onchange="applyRawUnits()">
+          <option value="mv" selected>mV (input-referred)</option>
+          <option value="adc">ADC code</option>
+        </select>
+      </label>
       <label class="field"><span>RESP bandwidth</span>
         <select id="respFilterPreset" onchange="applyRespFilterPreset()">
           <option value="clinical" selected>0.05–0.70 Hz</option>
           <option value="wide">0.05–3.00 Hz</option>
           <option value="motion">0.10–0.70 Hz</option>
           <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label class="field" title="Bedside monitors sweep respiration at a quarter of the ECG speed (6.25 mm/s against 25 mm/s) so several breaths are on screen at once"><span>RESP window</span>
+        <select id="respSweep" onchange="applySweepSettings()">
+          <option value="x4" selected>¼ ECG speed</option>
+          <option value="10">10 s</option><option value="20">20 s</option>
+          <option value="30">30 s</option><option value="60">60 s</option>
+          <option value="same">Same as ECG</option>
         </select>
       </label>
       <label class="field grp"><span>Auto scale</span>
@@ -1196,11 +1210,11 @@ body:has(.vital-tag.alert) .app-header{
           <div class="chart-id">
             <span class="chart-index">1</span>
             <span class="chart-name" id="titleRawCh1" style="color:var(--sig-resp)">CH1 · RESPIRATION</span>
-            <span class="chart-unit" id="unitRawCh1">raw adc</span>
+            <span class="chart-unit" id="unitRawCh1">raw · mV</span>
             <span class="badge normal" id="badgeCh1Raw">NORMAL</span>
           </div>
           <div class="chart-readout">
-            <span class="readout" id="val1_ch1" style="color:var(--sig-resp)">0</span>
+            <span class="readout" id="val1_ch1" style="color:var(--sig-resp)">0.0000 mV</span>
             <button class="ghost-btn" title="Solo this trace" aria-label="Solo this trace" onclick="toggleSolo('card1_ch1')"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
         </div>
@@ -1244,11 +1258,11 @@ body:has(.vital-tag.alert) .app-header{
           <div class="chart-id">
             <span class="chart-index">3</span>
             <span class="chart-name" id="titleRawCh2" style="color:var(--sig-ecg)">CH2 · ECG</span>
-            <span class="chart-unit" id="unitRawCh2">raw adc</span>
+            <span class="chart-unit" id="unitRawCh2">raw · mV</span>
             <span class="badge normal" id="badgeCh2Raw">NORMAL</span>
           </div>
           <div class="chart-readout">
-            <span class="readout" id="val1_ch2" style="color:var(--sig-ecg)">0</span>
+            <span class="readout" id="val1_ch2" style="color:var(--sig-ecg)">0.0000 mV</span>
             <button class="ghost-btn" title="Solo this trace" aria-label="Solo this trace" onclick="toggleSolo('card1_ch2')"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
         </div>
@@ -2637,6 +2651,12 @@ body:has(.vital-tag.alert) .app-header{
           <div class="mono" id="fiRegisters" style="font-size:9px;line-height:1.8;color:var(--ink-3);word-break:break-all">—</div>
         </div>
         <div class="callout" id="fiIntegrity">Waiting for header…</div>
+        <div class="tiles c2 dense" id="fiEnding" style="margin-top:10px">
+          <div class="tile"><span>Stopped because</span><b id="fiStop">—</b></div>
+          <div class="tile"><span>Measured rate</span><b id="fiSpsm">—</b></div>
+          <div class="tile"><span>Battery start → end</span><b id="fiBattery">—</b></div>
+          <div class="tile"><span>Board temperature</span><b id="fiBoardTemp">—</b></div>
+        </div>
       </section>
       <section>
         <div class="status-line" id="filePreviewStatus" style="margin-bottom:7px">Requesting a graph-priority preview…</div>
@@ -3958,8 +3978,30 @@ function handleStatusText(text) {
     setText('fiIntegrity', text.slice(10).replaceAll('_',' '));
     setText('filePreviewStatus', 'Unable to inspect this file.'); return;
   }
+  // V2.1.6: what the footer says about how the recording ended
+  if (text.startsWith('FFTR:')) {
+    const f = parseKeyValuePayload(text, 'FFTR:');
+    const reasons = { 0:'not recorded', 1:'stopped by the user', 2:'timed duration reached',
+                      3:'USB host took the card', 4:'SD write error', 5:'LOW BATTERY' };
+    const stop = Number(f.STOP);
+    setText('fiStop', (reasons[stop] || `code ${f.STOP}`) + (Number(f.DROP) ? ` · ${f.DROP} dropped blocks` : ''));
+    const sps = Number(f.SPSM), fs = Number($('fiFs')?.textContent.replace(/[^0-9.]/g, '')) || 0;
+    setText('fiSpsm', Number.isFinite(sps) && sps > 0
+      ? `${sps.toFixed(3)} SPS${fs ? ` (${((sps/fs - 1)*1e6).toFixed(0)} ppm)` : ''} over ${Number(f.SPAN)||0} s`
+      : 'not measured (under 10 s)');
+    if (f.BV0 !== undefined) {
+      setText('fiBattery', `${(Number(f.BV0)/1000).toFixed(3)} → ${(Number(f.BV1)/1000).toFixed(3)} V`
+        + ` · lowest ${(Number(f.BVMIN)/1000).toFixed(3)} V · ${f.BPCT} %${f.CHG === '1' ? ' · charging' : ''}`);
+      setText('fiBoardTemp', `${(Number(f.T0)/100).toFixed(2)} → ${(Number(f.T1)/100).toFixed(2)} °C (nRF52 die)`);
+    } else {
+      setText('fiBattery', 'not in this file (before V2.1.6)');
+      setText('fiBoardTemp', '—');
+    }
+    return;
+  }
   if (text.startsWith('FINFO:')) {
     const f = parseKeyValuePayload(text, 'FINFO:');
+    ['fiStop','fiSpsm','fiBattery','fiBoardTemp'].forEach(id => setText(id, f.TYPE === 'COMPLETE' ? '…' : 'no footer'));
     setText('fiName', f.NAME || inspectedFileName || '—');
     setText('fiType', f.TYPE || '—');
     setText('fiSize', formatBytes(f.SIZE));
@@ -5505,7 +5547,7 @@ function describeActiveMode(channel) {
     const alignMs = isCh1 ? 0 : rawAlignmentMs();
     return { channel, mux, powered:true, normal:true, badge:'NORMAL', badgeClass:'normal', unit:'mV',
       rawTitle:isCh1 ? 'CH1 · RESPIRATION' : 'CH2 · ECG',
-      rawUnit:alignMs >= 0.5 ? `raw adc · held ${Math.round(alignMs)} ms to match` : 'raw adc',
+      rawUnit:alignMs >= 0.5 ? `${rawUnitText()} · held ${Math.round(alignMs)} ms to match` : rawUnitText(),
       processedTitle:isCh1 ? 'CH1 · RESP FILTERED' : 'CH2 · ECG FILTERED',
       processedUnit:isCh1 ? respFilterState.label : ecgFilterState.label,
       warning:(!isCh1 && ecgBaseline.enabled && !rawAlignEnabled)
@@ -5513,7 +5555,7 @@ function describeActiveMode(channel) {
         : '' };
   }
   const common = { channel, mux, powered:true, normal:false, badgeClass:mux === 5 ? 'test' : 'diag',
-    rawTitle:`${channelName} · ${muxOptions[mux][1].toUpperCase()}`, rawUnit:'raw adc', warning:'' };
+    rawTitle:`${channelName} · ${muxOptions[mux][1].toUpperCase()}`, rawUnit:rawUnitText(), warning:'' };
   if (mux === 1) return { ...common, badge:'INPUT SHORT', unit:'µV', processedTitle:`${channelName} · INPUT-REFERRED NOISE`, processedUnit:'µV', metricKind:'noise', convert:mv => mv*1000 };
   if (mux === 2) return { ...common, badge:'RLD MEASURE', unit:'mV', processedTitle:`${channelName} · RLDIN vs MID-SUPPLY`, processedUnit:'mV', metricKind:'rld', convert:mv => mv, trendHz:5 };
   if (mux === 3) return { ...common, badge:'SUPPLY', unit:'V',
@@ -5812,6 +5854,8 @@ function formatAxisValue(value, step) {
   if (magnitude >= 1)   return value.toFixed(1);
   if (magnitude >= 0.1) return value.toFixed(2);
   if (magnitude >= 0.01) return value.toFixed(3);
+  if (magnitude >= 0.001) return value.toFixed(4);
+  if (magnitude >= 0.0001) return value.toFixed(5);
   return value.toExponential(1);
 }
 
@@ -5857,6 +5901,13 @@ class TurboSweepChart {
     this.bgCtx = this.bgCanvas.getContext('2d', { alpha:false });
     this.axisDiv = $(axisId); this.color = color;
     this.calibrated = !!options.calibrated;      // true => y axis is in mV
+    // Respiration is a 20-70 µV p-p wave at 6-20 breaths a minute riding on
+    // tens of mV of electrode DC. It gets its own window (several breaths, not
+    // the ECG's one), a stable scale with a floor, and it never takes the ECG
+    // paper gain: at 10 mm/mV a whole breath is half a millimetre.
+    this.respiration = !!options.respiration;
+    this.minSpan = options.minSpan || 0;         // smallest span the autoscaler may zoom into
+    this.decim = 1; this.decimCount = 0; this.decimSum = 0;
     this.gridMode = 'clinical';
     this.paperMvSpan = 0;                        // 0 = autoscale, >0 = fixed mV span
     this.visibleSamples = 2500; this.scaleMode = 'fast'; this.scaleReady = false;
@@ -5889,7 +5940,9 @@ class TurboSweepChart {
   }
 
   scaleConfig() {
-    if (this.scaleMode === 'stable') return { interval:400, expand:0.30, shrink:0.035, deadband:0.020 };
+    // A respiration window holds several breaths, so its extremes change slowly
+    // and a fast scaler only makes the wave breathe in height as well.
+    if (this.scaleMode === 'stable' || this.respiration) return { interval:400, expand:0.30, shrink:0.035, deadband:0.020 };
     if (this.scaleMode === 'fast')   return { interval:90,  expand:0.75, shrink:0.22,  deadband:0.010 };
     return { interval:180, expand:0.50, shrink:0.09, deadband:0.014 };
   }
@@ -5915,10 +5968,21 @@ class TurboSweepChart {
   // 10 mm/mV is that the same deflection means the same voltage every time you
   // look at it, which an axis that rescales itself cannot deliver.
   setPaperSpan(mvSpan) {
-    const next = (Number.isFinite(mvSpan) && mvSpan > 0 && this.calibrated) ? mvSpan : 0;
+    const next = (Number.isFinite(mvSpan) && mvSpan > 0 && this.calibrated && !this.respiration) ? mvSpan : 0;
     if (next === this.paperMvSpan) return;
     this.paperMvSpan = next;
     this.scaleReady = false; this.drawnScaleValid = false; this.needsFullRepaint = true;
+  }
+  // Seconds across the canvas. A respiration window can be a minute - more
+  // samples than the ring holds - so that chart averages blocks of samples into
+  // one point, about four per pixel column. Respiration is band-limited below
+  // 1 Hz, so nothing visible is lost. The ECG is never decimated: averaging
+  // would shave the R wave.
+  setWindow(seconds, fs) {
+    if (!(seconds > 0) || !(fs > 0) || !this.width) return;
+    const decim = this.respiration ? Math.max(1, Math.floor(seconds*fs/Math.max(64, this.width*4))) : 1;
+    if (decim !== this.decim) { this.decim = decim; this.decimCount = 0; this.decimSum = 0; }
+    this.setScanSpeed(this.width*decim/(fs*seconds));
   }
   setScaleMode(mode) { this.scaleMode = mode; this.scaleReady = false; this.lastScaleUpdate = 0; this.needsFullRepaint = true; }
   setGridMode(mode) { this.gridMode = mode; this.needsFullRepaint = true; this.drawGrid(); }
@@ -5943,6 +6007,7 @@ class TurboSweepChart {
 
   reset() {
     if (this.columnValid) this.columnValid.fill(0);
+    this.decimCount = 0; this.decimSum = 0;
     this.phase = 0; this.currentColumn = -1; this.lastPaintedColumn = -1;
     this.scaleReady = false; this.drawnScaleValid = false;
     this.lastScaleUpdate = 0; this.cMax = 1; this.cMin = -1;
@@ -5977,9 +6042,10 @@ class TurboSweepChart {
 
     // ECG paper: 1 mm = 0.04 s, 5 mm = 0.20 s. Amplitude boxes are drawn at
     // 0.1 / 0.5 mV whenever the axis is genuinely calibrated in mV.
-    const seconds = this.visibleSamples/Math.max(1, currentSps);
+    const seconds = this.visibleSamples*this.decim/Math.max(1, currentSps);
     const pxPerSecond = w/Math.max(1e-6, seconds);
-    const minorX = pxPerSecond*0.04, majorX = pxPerSecond*0.2;
+    // ECG paper is 0.04 s / 0.2 s; a respiration window reads in seconds.
+    const minorX = pxPerSecond*(this.respiration ? 1 : 0.04), majorX = pxPerSecond*(this.respiration ? 5 : 0.2);
     const drawVertical = (step, style, lineWidth) => {
       if (step < 3) return;
       g.strokeStyle = style; g.lineWidth = lineWidth; g.beginPath();
@@ -6013,6 +6079,11 @@ class TurboSweepChart {
 
   queueData(value) {
     if (!Number.isFinite(value) || !this.columnValid) return;
+    if (this.decim > 1) {
+      this.decimSum += value;
+      if (++this.decimCount < this.decim) return;
+      value = this.decimSum/this.decimCount; this.decimSum = 0; this.decimCount = 0;
+    }
     const n = this.columnValid.length;
     if (this.currentColumn < 0) { this.phase = 0; this.currentColumn = 0; }
     else {
@@ -6046,6 +6117,7 @@ class TurboSweepChart {
 
   queueBreak() {
     this.pendingSamples++;
+    this.decimCount = 0; this.decimSum = 0;
     if (!this.columnValid || this.currentColumn < 0) return;
     const n = this.columnValid.length;
     for (let i = 0; i <= this.wipeGap; i++) this.columnValid[(this.currentColumn+i)%n] = 0;
@@ -6092,7 +6164,11 @@ class TurboSweepChart {
       count++;
     }
     if (count < 8) return;
-    const mid = (low+high)*0.5, span = Math.max(high-low, Math.abs(mid)*1e-6, 1e-7);
+    const mid = (low+high)*0.5;
+    // With no breathing the filtered trace is a microvolt of noise; zooming
+    // into it would draw noise that looks like breathing, so hold a floor.
+    if (high - low < this.minSpan) { low = mid - this.minSpan/2; high = mid + this.minSpan/2; }
+    const span = Math.max(high-low, Math.abs(mid)*1e-6, 1e-7);
     let targetMin = low - span*0.14, targetMax = high + span*0.14;
     if (this.paperMvSpan > 0) {
       // Hold the window height at the requested mV and let it track the
@@ -6316,22 +6392,52 @@ function pxPerMm() { return CSS_PX_PER_MM*paperCalibration; }
 function paperSpeedMmPerSec() { return Number($('paperSpeed')?.value) || 0; }
 function paperGainMmPerMv() { return Number($('paperGain')?.value) || 0; }
 
+function respWindowSeconds(ecgSeconds) {
+  const choice = $('respSweep')?.value || 'x4';
+  if (choice === 'same') return ecgSeconds;
+  if (choice === 'x4') return ecgSeconds*4;       // 6.25 mm/s against 25 mm/s
+  return Number(choice) || ecgSeconds*4;
+}
 function applySweepSettings() {
-  const chart = chart1_ch1;
-  if (chart && chart.width > 0) {
+  const chart = CHARTS.find(c => c.width > 0 && !c.respiration) || CHARTS.find(c => c.width > 0);
+  if (chart) {
     const speed = paperSpeedMmPerSec();
     // In paper mode the window is whatever fits at the requested speed; the
     // sweep-seconds control becomes a readout rather than the source of truth.
     const seconds = speed > 0
       ? chart.width/(pxPerMm()*speed)
       : (Number($('sweepSeconds')?.value) || 5);
-    CHARTS.forEach(c => c.setScanSpeed(c.width/(currentSps*seconds)));
+    const respSeconds = respWindowSeconds(seconds);
+    CHARTS.forEach(c => c.setWindow(c.respiration ? respSeconds : seconds, currentSps));
     const label = $('paperWindowNote');
     if (label) label.textContent = speed > 0
-      ? `${speed} mm/s → ${seconds.toFixed(1)} s of trace across the canvas`
+      ? `${speed} mm/s → ${seconds.toFixed(1)} s of trace across the canvas · RESP ${respSeconds.toFixed(0)} s`
       : '';
   }
   savePrefs();
+}
+
+/* Raw traces in input-referred millivolts - the same conversion the filtered
+   traces and the recorder's files use - or, for register work, as the ADC
+   delivered them. Only the display changes: saturation and lead-off checks
+   keep reading codes. */
+const RESP_MIN_SPAN_MV = 0.02;
+let rawUnitsMv = true;
+function rawDisplayValue(adc, channel) { return rawUnitsMv ? adcToInputMv(adc, channel) : adc; }
+function formatRawReadout(adc, channel) {
+  return rawUnitsMv ? `${adcToInputMv(adc, channel).toFixed(4)} mV` : adc.toLocaleString();
+}
+function rawUnitText() { return rawUnitsMv ? 'raw · mV' : 'raw adc'; }
+function syncRawUnits() {
+  rawUnitsMv = ($('rawUnits')?.value || 'mv') !== 'adc';
+  [chart1_ch1, chart1_ch2].forEach(c => { if (c) { c.calibrated = rawUnitsMv; c.reset(); } });
+  // the floor is in the chart's own units, and a code is 48 nV at gain 6
+  if (chart1_ch1) chart1_ch1.minSpan = rawUnitsMv ? RESP_MIN_SPAN_MV : 0;
+}
+function applyRawUnits() {
+  syncRawUnits();
+  activeModeSignature = ''; applyActiveModeConfiguration(true);
+  applyPaperMode();
 }
 
 function applyPaperMode() {
@@ -9385,7 +9491,7 @@ function processChannelForActiveMode(channel, adc) {
   // engineering metrics - uses this value rather than the live one, because
   // the alternative is two numbers half a second apart on the same row.
   const alignedRaw = rawAlign[channel].push(adc);
-  rawChart.queueData(alignedRaw);
+  rawChart.queueData(rawDisplayValue(alignedRaw, channel));
   if (mode.normal) {
     if (channel === 0) {
       const value = respDSP.process(adcToInputMv(adc, 0));
@@ -9639,8 +9745,8 @@ function animationLoop(frameTimestamp = performance.now()) {
           }
           if (Number.isFinite(latestRespResult.rate)) setText('valBRPM', Math.round(latestRespResult.rate));
           else if (['INVALID','NO RESP'].includes(latestRespResult.quality)) setText('valBRPM','--');
-          if (activeDisplayModes[0]?.powered) setText('val1_ch1', alignedCh1.toLocaleString());
-          if (activeDisplayModes[1]?.powered) setText('val1_ch2', alignedCh2.toLocaleString());
+          if (activeDisplayModes[0]?.powered) setText('val1_ch1', formatRawReadout(alignedCh1, 0));
+          if (activeDisplayModes[1]?.powered) setText('val1_ch2', formatRawReadout(alignedCh2, 1));
           if (resultCh1.available) { setText('val3_ch1', formatModeNumber(resultCh1.value, resultCh1.unit)); updateModeMetrics(0, resultCh1.value, alignedCh1); }
           else if (resultCh1.settling) setText('val3_ch1','SETTLING');
           if (resultCh2.available) { setText('val3_ch2', formatModeNumber(resultCh2.value, resultCh2.unit)); updateModeMetrics(1, resultCh2.value, alignedCh2); }
@@ -11870,7 +11976,7 @@ function exportAnalysisCsv() {
    ================================================================== */
 
 const PREF_KEY = 'hecg01.console.v3';
-const PREF_SELECTS = ['sweepSeconds','gridMode','autoScaleMode','traceQuality','ecgFilterPreset','respFilterPreset','baselineMode','paperSpeed','paperGain','rateResponse','rawAlignToggle','traceStyle','uiTypeface'];
+const PREF_SELECTS = ['sweepSeconds','respSweep','rawUnits','gridMode','autoScaleMode','traceQuality','ecgFilterPreset','respFilterPreset','baselineMode','paperSpeed','paperGain','rateResponse','rawAlignToggle','traceStyle','uiTypeface'];
 let prefsLoaded = false;
 
 let prefSaveTimer = null;
@@ -12114,9 +12220,9 @@ function initPalette() {
    18. BOOT
    ================================================================== */
 function boot() {
-  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp);
-  chart3_ch1 = new TurboSweepChart('fg3_ch1','bg3_ch1','yAxis3_ch1',PALETTE.respFilt,{ calibrated:true });
-  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg);
+  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV });
+  chart3_ch1 = new TurboSweepChart('fg3_ch1','bg3_ch1','yAxis3_ch1',PALETTE.respFilt,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV });
+  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg,{ calibrated:true });
   chart3_ch2 = new TurboSweepChart('fg3_ch2','bg3_ch2','yAxis3_ch2',PALETTE.ecgFilt,{ calibrated:true });
   CHARTS = [chart1_ch1, chart1_ch2, chart3_ch1, chart3_ch2];
 
@@ -12144,6 +12250,7 @@ function boot() {
   // Before applyEcgFilterPreset(): configureEcgFilters() rebuilds the delay
   // line from rawAlignEnabled, so the restored choice has to be in place first.
   rawAlignEnabled = ($('rawAlignToggle')?.value ?? '1') !== '0';
+  syncRawUnits();
   applyEcgFilterPreset();
   applyRespFilterPreset();
   applyRateResponse();

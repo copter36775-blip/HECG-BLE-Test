@@ -66,15 +66,25 @@ not need pairing.
 
 ## Firmware
 
-This console speaks to firmware **V2.1.4**. Older firmware still connects; features
+This console speaks to firmware **V2.1.6**. Older firmware still connects; features
 added later degrade to blank tiles rather than wrong numbers.
+
+V2.1.6 writes the battery voltage (start, end, lowest) and the board temperature of
+each recording into its footer, and the file inspector shows them together with the
+stop reason and the measured sample rate - so a recording that ended on LOW BATTERY
+says at what voltage without taking the card out.
+
+Raw traces are in input-referred millivolts (ADC codes are one click away under
+*Raw units*), and respiration has its own window: a quarter of the ECG speed by
+default, the 6.25 mm/s bedside monitors use, because a breath is 20-70 µV and takes
+3-10 s - a 5-second ECG window never showed more than one of them.
 
 V2.1.4 stamps each block at the moment the samples were acquired rather than when
 they reached the card, measures the real sample rate on the device and reports it
 in the `SYS` message. The console shows it next to the nominal rate, and works out
 its own decoded rate over a 60-second regression instead of counting packets per
 second - the arrival count follows the radio's connection interval, not the ADC.
-The ADS1292R runs from its internal oscillator, measured at -460 to -1600 ppm
+The ADS1292R runs from its internal oscillator, measured at -180 to -1600 ppm
 against the MCU crystal and inside the datasheet's tolerance, so the difference is
 real and worth showing.
 
