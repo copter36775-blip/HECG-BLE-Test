@@ -42,21 +42,27 @@
 :root{
   /* ---------------------------------------------------------------
      SURFACE RAMP — one hue, perceptually even in OKLCH.
-     L 0.150 → 0.270 in equal 0.030 steps, chroma 0.005.
+     L 0.150 → 0.270 in equal 0.030 steps, hue 264°, chroma 0.0040–0.0046.
+     V4 was written as "chroma 0.005" but its hexes rounded to 0.0061 on
+     the panel; V5 re-solved all five inside the limit at the same L.
      --------------------------------------------------------------- */
   --s-well:#0a0b0d;        /* deepest recess — plot wells            */
-  --s-chassis:#101214;     /* app background                         */
-  --s-panel:#17181b;       /* cards, rails                           */
-  --s-raised:#1e1f22;      /* controls, inputs                       */
-  --s-hover:#252729;       /* hover                                  */
+  --s-chassis:#111214;     /* app background                         */
+  --s-panel:#17181a;       /* cards, rails                           */
+  --s-raised:#1e1f21;      /* controls, inputs                       */
+  --s-hover:#252628;       /* hover                                  */
 
   /* ---------------------------------------------------------------
      INK — each step is defined by the contrast it must clear against
      --s-panel, not by a colour someone liked.  V3's --ink-4 sat at
      2.58:1 and was the colour of every micro-label in the file.
      --------------------------------------------------------------- */
-  --ink-hi:#e3e7ec;        /* 12.1:1  vitals, primary readouts       */
-  --ink:#babec2;           /*  8.0:1  body values                    */
+  --ink-hi:#babec3;        /*  8.1:1  vitals, primary readouts.  L 0.800,
+                                      below the dimmest trace (0.809): the
+                                      waveform is the brightest thing on
+                                      screen.  V4's 12.1:1 (L 0.926) made the
+                                      52 px numerals outshine the signal.  */
+  --ink:#b0b4b9;           /*  7.2:1  body values — still AAA        */
   --ink-mid:#a1a5a9;       /*  6.1:1  secondary values               */
   --ink-low:#8a8d92;       /*  4.5:1  micro-labels — the AA floor    */
   --ink-faint:#6c7074;     /*  3.0:1  NON-TEXT ONLY: rules, chrome,
@@ -127,6 +133,8 @@
   --paper-ink:#14171a;      /* 15.6:1 on paper  — the trace           */
   --paper-mark:#1c7a68;     /*  4.9:1 on paper  — beat marks          */
   --paper-label:#5a6570;    /*  5.3:1 on paper  — row labels          */
+  --paper-grid-minor:rgba(240,120,120,.42); /* 1 mm on the print strip */
+  --paper-grid-major:rgba(226,74,74,.72);   /* 5 mm on the print strip */
 
   /* ---- space: 4px grid, six values, nothing between them --------- */
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-6:24px; --sp-8:32px;
@@ -142,14 +150,37 @@
   /* ---- sub-grid: rules and seams are not layout spacing ---------- */
   --seam:1px;      /* a hairline gap that reveals the grid beneath   */
   --spine-w:2px;   /* the channel identity spine and alarm rules     */
+  --nudge:2px;     /* optical: a value tucked under its label, a
+                      keycap's inner padding - never layout spacing  */
 
   /* ---- interaction tints, derived from the ramp above ------------- */
-  --s-press:#2c2e31;             /* one step above --s-hover          */
+  --s-press:#2c2d2f;             /* one step above --s-hover, C 0.004 */
   --accent-text:#d8c2ff;         /* link hover                        */
   --tint-warn:#d8bd85;           /* body text inside a medium callout */
   --tint-bad:#eeaeae;            /* body text inside a high callout   */
   --tint-danger:#ffd9d9;
   --tint-record:#ffe3e3;
+
+  /* ---- alarm and state glows, scrims, the two odd shadows --------
+     Written once here instead of as literals in the rules below, so
+     the token block really is the only place a colour appears. */
+  --alarm-high-hover:rgba(248,75,75,.21);   /* danger / record hover wash */
+  --alarm-high-wash:rgba(248,75,75,.035);   /* read-only register rows   */
+  --glow-ok:0 0 0 1px rgba(99,207,155,.4),0 0 6px rgba(99,207,155,.35);
+  --glow-high:0 0 0 1px rgba(248,75,75,.5),0 0 8px rgba(248,75,75,.5);
+  --glow-high-static:0 0 0 2px var(--alarm-high),0 0 10px rgba(248,75,75,.6);
+  --glow-med:0 0 0 1px rgba(237,180,23,.45);
+  --glow-low:0 0 0 1px rgba(121,212,228,.42);
+  --glow-rec:0 0 0 1px rgba(248,75,75,.5),0 0 8px rgba(248,75,75,.45);
+  --scrim:rgba(4,5,7,.82);
+  --scrim-palette:rgba(4,5,7,.76);
+  --e-footer:0 -1px 0 rgba(0,0,0,.4);       /* the status bar's top edge */
+  --e-paper:0 1px 0 rgba(255,255,255,.55) inset,0 8px 22px rgba(0,0,0,.6);
+
+  /* ---- canvas ------------------------------------------------------
+     Canvases cannot read var(); PALETTE and tone() read these once.  */
+  --cursor:#ffffff;        /* the sweep head's highlight, drawn at 15 % */
+  --math:var(--mono);      /* formulas; the Cambria face re-points --mono */
 
   /* ---- elevation: one light source, from above ------------------- */
   --e1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.40);
@@ -308,6 +339,56 @@ button{font-family:inherit;color:inherit}
 .pill.warn{color:var(--alarm-med);border-color:var(--line-2);background:var(--alarm-med-bg)}
 .pill.bad{color:var(--alarm-high);border-color:var(--line-2);background:var(--alarm-high-bg)}
 .header-spacer{flex:1 1 auto;min-width:0}
+
+/* ---- status band ---------------------------------------------------
+   Recessed like the nameplate beside it, because it is read rather than
+   operated.  Every level has a colour AND a shape AND, for the two alarm
+   levels, a flash rate - the same grammar as the lead LEDs:
+     idle   hollow ring, ink       - nothing to say, or not known
+     ok     filled disc, --state-ok
+     info   filled disc, ink       - working, nothing wrong (acquiring)
+     med    triangle, --alarm-med, 0.6 Hz
+     high   diamond, --alarm-high, 2 Hz, and the cell itself is outlined
+   Values are tabular and hold a minimum width, so a state change does not
+   make the header shuffle. */
+.status-band{
+  display:flex;align-items:stretch;flex:0 1 auto;min-width:0;
+  border:1px solid var(--line-1);border-radius:var(--r);
+  background:var(--s-chassis);box-shadow:var(--recess);overflow:hidden;
+}
+.sband-cell{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-3);height:36px;min-width:0;
+  border-left:1px solid var(--line-1);transition:background var(--dur) var(--ease)}
+.sband-cell:first-child{border-left:0}
+.sband-text{display:flex;flex-direction:column;justify-content:center;line-height:1.15;min-width:0}
+.sband-label{font:600 var(--t-micro) var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-low)}
+.sband-value{font:600 var(--t-md) var(--mono);font-variant-numeric:tabular-nums slashed-zero;
+  color:var(--ink-hi);white-space:nowrap;min-width:9ch}
+.sband-sub{font:400 var(--t-micro) var(--mono);font-variant-numeric:tabular-nums slashed-zero;color:var(--ink-low);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24ch}
+.sband-sub.stale{color:var(--alarm-med)}
+.sband-mark{width:10px;height:10px;flex-shrink:0;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink-faint)}
+.sband-cell[data-level="ok"] .sband-mark{background:var(--state-ok);box-shadow:none}
+.sband-cell[data-level="ok"] .sband-value{color:var(--state-ok)}
+.sband-cell[data-level="info"] .sband-mark{background:var(--ink-mid);box-shadow:none}
+.sband-cell[data-level="med"] .sband-mark{border-radius:0;background:var(--alarm-med);box-shadow:none;
+  clip-path:polygon(50% 0,100% 100%,0 100%);animation:alarmMed 1667ms steps(1,end) infinite}
+.sband-cell[data-level="med"] .sband-value{color:var(--alarm-med)}
+.sband-cell[data-level="high"]{background:var(--alarm-high-bg);box-shadow:inset 0 0 0 1px var(--alarm-high)}
+.sband-cell[data-level="high"] .sband-mark{border-radius:var(--seam);background:var(--alarm-high);box-shadow:none;
+  transform:rotate(45deg) scale(.85);animation:alarmHigh 500ms steps(1,end) infinite}
+.sband-cell[data-level="high"] .sband-value{color:var(--alarm-high)}
+/* LOW - awareness: a cyan square, steady */
+.sband-cell[data-level="low"] .sband-mark{border-radius:var(--seam);background:var(--alarm-low);box-shadow:none;transform:scale(.8)}
+.sband-cell[data-level="low"] .sband-value{color:var(--alarm-low)}
+/* IEC 60601-1-8's priority marks, in front of the condition: the fourth cue
+   after colour, shape and flash rate, and the one that survives a greyscale
+   print or a colour-blind reader. */
+.sband-prio:empty{display:none}
+.sband-prio{margin-right:var(--sp-1);letter-spacing:.06em}
+@media(prefers-reduced-motion:reduce){
+  .sband-cell[data-level="med"] .sband-mark,.sband-cell[data-level="high"] .sband-mark{animation:none}
+  .sband-cell[data-level="high"]{box-shadow:inset 0 0 0 2px var(--alarm-high)}
+}
 .header-cluster{display:flex;align-items:center;gap:var(--sp-3);flex-shrink:0}
 
 .battery{
@@ -316,7 +397,7 @@ button{font-family:inherit;color:inherit}
   box-shadow:var(--recess);
 }
 .batt-shell{position:relative;width:26px;height:12px;border:1.5px solid var(--ink-faint);border-radius:var(--r-tight);padding:var(--seam)}
-.batt-shell::after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:4px;background:var(--ink-faint);border-radius:0 1px 1px 0}
+.batt-shell::after{content:"";position:absolute;right:calc(-1 * (var(--spine-w) + var(--seam)));top:calc(var(--spine-w) + var(--seam));width:2px;height:4px;background:var(--ink-faint);border-radius:0 var(--r-round) var(--r-round) 0}
 .batt-fill{height:100%;background:var(--state-ok);transition:width var(--dur-slow) var(--ease),background var(--dur) var(--ease)}
 .batt-text{font:600 var(--t-sm)/1.2 var(--mono);color:var(--ink);min-width:54px}
 .batt-text small{display:block;font:400 var(--t-micro)/1.3 var(--mono);color:var(--ink-low);letter-spacing:.02em}
@@ -347,10 +428,10 @@ button{font-family:inherit;color:inherit}
 .btn.primary{background:var(--s-hover);border-color:var(--line-3);color:var(--ink-hi);box-shadow:var(--e2)}
 .btn.primary:hover:not(:disabled){background:var(--s-press);border-color:var(--accent-line);color:var(--ink-hi)}
 .btn.danger{color:var(--alarm-high);border-color:var(--line-2);background:var(--alarm-high-bg)}
-.btn.danger:hover:not(:disabled){background:rgba(248,75,75,.2);border-color:var(--alarm-high);color:var(--tint-danger)}
+.btn.danger:hover:not(:disabled){background:var(--alarm-high-hover);border-color:var(--alarm-high);color:var(--tint-danger)}
 /* Record is the one control allowed to shout, and only while armed. */
 .btn.record{background:var(--alarm-high-bg);border-color:var(--alarm-high);color:var(--alarm-high)}
-.btn.record:hover:not(:disabled){background:rgba(248,75,75,.22);color:var(--tint-record)}
+.btn.record:hover:not(:disabled){background:var(--alarm-high-hover);color:var(--tint-record)}
 .btn.stop{background:var(--s-hover);border-color:var(--line-3);color:var(--ink-hi)}
 .btn.sm{padding:var(--sp-1) var(--sp-2);min-height:24px;font-size:var(--t-micro)}
 .btn.on{border-color:var(--accent-line);color:var(--accent);background:var(--accent-quiet)}
@@ -376,20 +457,20 @@ button{font-family:inherit;color:inherit}
   touch-action:none;   /* pointer events must not be stolen by scroll */
 }
 .splitter::before{
-  content:'';position:absolute;inset:0 calc(50% - 1px);
-  background:var(--line-2);border-radius:1px;
+  content:'';position:absolute;inset:0 calc(50% - var(--seam));
+  background:var(--line-2);border-radius:var(--r-round);
   transition:background var(--dur-fast) var(--ease);
 }
 /* The grip: three short marks, drawn with the same token as the rule so
    the splitter never becomes a second accent colour. */
 .splitter::after{
-  content:'';position:absolute;left:calc(50% - 2px);top:calc(50% - 11px);
-  width:4px;height:22px;border-radius:2px;background:var(--line-3);
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:4px;height:22px;border-radius:var(--r-round);background:var(--line-3);
   opacity:.5;transition:opacity var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);
 }
 .splitter:hover::before,.splitter.dragging::before{background:var(--accent-line)}
 .splitter:hover::after,.splitter.dragging::after{opacity:1;background:var(--accent)}
-.splitter:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:2px}
+.splitter:focus-visible{outline:2px solid var(--accent);outline-offset:var(--seam);border-radius:var(--r-tight)}
 body.splitting{cursor:col-resize;user-select:none}
 .scope-col{display:flex;flex-direction:column;gap:var(--sp-2);min-height:0;min-width:0}
 
@@ -479,8 +560,13 @@ body.splitting{cursor:col-resize;user-select:none}
 .chart-body{flex:1 1 auto;display:flex;gap:var(--sp-2);min-height:0}
 .yaxis{width:48px;display:flex;flex-direction:column;justify-content:space-between;text-align:right;font:400 var(--t-micro) var(--mono);color:var(--ink-low);padding:var(--seam) 0;flex-shrink:0;letter-spacing:.01em}
 /* The same grid read in ADC codes, right of the raw traces: mV = code x LSB on screen. */
-.yaxis-code{display:none;width:52px;text-align:left;padding-left:6px;opacity:.78}
+.yaxis-code{display:none;width:52px;text-align:left;padding-left:var(--sp-2);opacity:.78}
 .yaxis-code.on{display:flex}
+/* While the raw wells carry a code axis, every other well keeps an empty
+   gutter of the same width.  All four wells are then the same width, so one
+   sweep window is the same mm/s on each - the 25 mm/s a paper setting
+   promises - and raw and filtered show the same instant in the same column. */
+.scope-stack.code-axes .chart-body:not(:has(.yaxis-code))::after{content:"";width:52px;flex-shrink:0}
 /* The well is the one genuinely recessed surface in the app: inner
    shadow at the top, no highlight anywhere, sunk below the panel. */
 .canvas-wrap{
@@ -496,6 +582,16 @@ body.splitting{cursor:col-resize;user-select:none}
 }
 .canvas-wrap::before{top:var(--sp-1);left:var(--sp-1);border-top:1px solid;border-left:1px solid}
 .canvas-wrap::after{bottom:var(--sp-1);right:var(--sp-1);border-bottom:1px solid;border-right:1px solid}
+/* The scale of the picture, printed on it - the way a bedside monitor labels
+   every wave "25 mm/s  10 mm/mV".  In paper mode it states the paper; when
+   the axis fits the signal it states the window and the volts per division,
+   because an autoscaled trace with no stated scale can be looked at but not
+   read.  Top right: the one corner no registration tick and no axis owns. */
+.well-scale{position:absolute;top:var(--sp-1);right:var(--sp-2);z-index:2;pointer-events:none;
+  padding:0 var(--sp-1);border-radius:var(--r-tight);background:var(--s-well);
+  font:500 var(--t-micro) var(--mono);font-variant-numeric:tabular-nums slashed-zero;letter-spacing:.02em;
+  color:var(--ink-low);white-space:nowrap}
+.well-scale:empty{display:none}
 
 /* The engineering overlay: visible only in diagnostic MUX modes, and
    deliberately not styled like the clinical chrome around it. */
@@ -503,7 +599,7 @@ body.splitting{cursor:col-resize;user-select:none}
 .mode-metrics.on{display:grid}
 .mmetric{min-width:0;padding:var(--sp-1) var(--sp-2);background:var(--s-raised)}
 .mmetric span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mmetric b{display:block;margin-top:2px;font:500 var(--t-sm) var(--mono);color:var(--ink-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmetric b{display:block;margin-top:var(--nudge);font:500 var(--t-sm) var(--mono);color:var(--ink-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mode-warn{display:none;margin:0 0 var(--sp-2);padding:var(--sp-1) var(--sp-2);border-left:var(--spine-w) solid var(--alarm-med);background:var(--alarm-med-bg);border-radius:0 var(--r-tight) var(--r-tight) 0;font:500 var(--t-xs) var(--mono);color:var(--alarm-med)}
 .mode-warn.on{display:block}
 
@@ -539,6 +635,9 @@ body.splitting{cursor:col-resize;user-select:none}
   letter-spacing:-.025em;
   color:var(--ink-hi);
   font-variant-numeric:tabular-nums slashed-zero;
+  /* three digits of room, right-aligned: 72 -> 100 -> 99 leaves the unit
+     where it was instead of walking it across the tile */
+  min-width:3ch;text-align:right;
   /* The beat response is a luminance change on the numeral itself —
      the instrument breathing, not a lamp blinking beside it. */
   transition:color var(--dur-fast) var(--ease),text-shadow var(--dur-fast) var(--ease);
@@ -547,16 +646,38 @@ body.splitting{cursor:col-resize;user-select:none}
 .vital-unit{
   font:600 var(--t-sm) var(--sans);letter-spacing:.08em;
   color:var(--ink-low);text-transform:uppercase;
-  position:relative;top:-1px;
+  position:relative;top:calc(-1 * var(--seam));
 }
 .vital-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
 .vital-tag{
   align-self:flex-start;font:600 var(--t-micro) var(--mono);letter-spacing:.05em;
-  color:var(--ink-low);padding:2px var(--sp-2);height:18px;display:inline-flex;align-items:center;
+  color:var(--ink-low);padding:var(--nudge) var(--sp-2);height:18px;display:inline-flex;align-items:center;
   border:1px solid var(--line-2);border-radius:var(--r-tight);white-space:nowrap;
   background:var(--s-raised);
 }
 .vital-tag.locked{color:var(--state-ok);background:var(--state-ok-bg)}
+.vital-tag[hidden]{display:none}
+.vital-flags{display:inline-flex;align-items:center;gap:var(--sp-2);min-width:0}
+/* A number that is no longer being updated must not look like one that is.
+   No sample for 3 s, no link, or a frozen display: the numeral drops to the
+   faint ink, the ribbon fades, and a tag says which of the three it is. */
+/* beside the unit, where the numeral row has room: the head keeps the
+   detector's own tag whole, so an alarm tag is never truncated to fit */
+.vital-tag.stale{color:var(--alarm-med);background:var(--alarm-med-bg);border-color:var(--alarm-med);
+  margin-left:auto;align-self:center}
+.vital-tag.stale.quiet{color:var(--ink-mid);background:var(--s-raised);border-color:var(--line-2)}
+.vital.stale .vital-num{color:var(--ink-faint)}
+.vital.stale .tacho{opacity:.35}
+.vital.stale .beat{opacity:.06}
+/* Quality meter: five rising bars, filled from the left.  The count carries
+   the value, so it reads without colour; two or fewer filled turns it amber. */
+.qmeter{display:inline-flex;align-items:flex-end;gap:var(--seam);height:12px}
+.qmeter i{display:block;width:3px;background:var(--line-2);border-radius:var(--seam)}
+.qmeter i:nth-child(1){height:4px}.qmeter i:nth-child(2){height:6px}.qmeter i:nth-child(3){height:8px}
+.qmeter i:nth-child(4){height:10px}.qmeter i:nth-child(5){height:12px}
+.qmeter[data-q="1"] i:nth-child(-n+1),.qmeter[data-q="2"] i:nth-child(-n+2){background:var(--alarm-med)}
+.qmeter[data-q="3"] i:nth-child(-n+3),.qmeter[data-q="4"] i:nth-child(-n+4),
+.qmeter[data-q="5"] i:nth-child(-n+5){background:var(--ink-mid)}
 /* LEAD OFF / SATURATED / NO QRS / STREAM GAP are high-priority states:
    red, flashing at 2 Hz, and the shape changes too so priority is not
    carried by colour alone. */
@@ -571,13 +692,13 @@ body.splitting{cursor:col-resize;user-select:none}
 
 /* the RR tachogram ribbon — see the accessor note in section 13 */
 .tacho{
-  position:relative;height:26px;margin-top:2px;
+  position:relative;height:26px;margin-top:var(--nudge);
   border-radius:var(--r-tight);background:var(--s-well);
   box-shadow:var(--recess);overflow:hidden;
 }
 .tacho canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tacho-cap{
-  position:absolute;right:var(--sp-1);bottom:1px;z-index:2;
+  position:absolute;right:var(--sp-1);bottom:var(--seam);z-index:2;
   font:600 var(--t-micro) var(--mono);letter-spacing:.05em;color:var(--ink-low);
   pointer-events:none;
 }
@@ -589,7 +710,7 @@ body.splitting{cursor:col-resize;user-select:none}
    ------------------------------------------------------------------ */
 .tabbar{display:flex;gap:0;padding:0 var(--sp-2);background:var(--s-chassis);border-bottom:1px solid var(--line-2);flex-shrink:0}
 .tab{
-  flex:1;padding:var(--sp-3) var(--sp-1) calc(var(--sp-3) - 1px);
+  flex:1;padding:var(--sp-3) var(--sp-1) calc(var(--sp-3) - var(--seam));
   border:0;border-bottom:var(--spine-w) solid transparent;background:transparent;cursor:pointer;
   font:600 var(--t-xs) var(--sans);letter-spacing:.05em;color:var(--ink-low);
   transition:color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);
@@ -641,13 +762,13 @@ body.splitting{cursor:col-resize;user-select:none}
   appearance:none;-webkit-appearance:none;cursor:pointer;outline:none;
 }
 .ctl input[type=range]::-webkit-slider-runnable-track{
-  height:4px;border-radius:2px;background:var(--s-panel);box-shadow:var(--recess);
+  height:var(--sp-1);border-radius:var(--r-round);background:var(--s-panel);box-shadow:var(--recess);
 }
 .ctl input[type=range]::-moz-range-track{
-  height:4px;border-radius:2px;background:var(--s-panel);box-shadow:var(--recess);
+  height:var(--sp-1);border-radius:var(--r-round);background:var(--s-panel);box-shadow:var(--recess);
 }
 .ctl input[type=range]::-webkit-slider-thumb{
-  appearance:none;-webkit-appearance:none;margin-top:-6px;
+  appearance:none;-webkit-appearance:none;margin-top:calc((var(--sp-1) - var(--sp-4)) / 2);
   width:16px;height:16px;border-radius:50%;background:var(--accent);
   border:1px solid var(--s-well);box-shadow:var(--e1);
 }
@@ -673,10 +794,15 @@ body.splitting{cursor:col-resize;user-select:none}
    other end: solo answers "only this one", the chips answer "not that one".
    A hidden trace is display:none rather than zero-height, so its canvas
    stops being laid out at all and the ones left take the whole stack. */
-.chiprow{display:flex;gap:4px;flex-wrap:wrap}
+.chiprow{display:flex;gap:var(--sp-1);flex-wrap:wrap}
+/* A trace toggle is a control, so it gets a control's target: 24 px tall,
+   10 px type.  V4 asked for an undefined size token, the declaration fell
+   back to the browser default, and the chips were the one control whose
+   size nobody had chosen. */
 .chip{
-  font:600 var(--t-2xs) var(--mono);letter-spacing:.04em;
-  padding:3px 8px;border-radius:var(--r-round);cursor:pointer;
+  font:600 var(--t-xs) var(--mono);letter-spacing:.04em;min-height:24px;
+  display:inline-flex;align-items:center;
+  padding:0 var(--sp-3);border-radius:var(--r-round);cursor:pointer;
   border:1px solid var(--line-2);background:transparent;color:var(--ink-low);
   transition:color .14s var(--ease),border-color .14s var(--ease),background .14s var(--ease);
 }
@@ -698,27 +824,27 @@ body.splitting{cursor:col-resize;user-select:none}
 }
 .deriv-hd{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2)}
 .deriv-hd h5{
-  margin:0;font:600 var(--t-2xs) var(--sans);letter-spacing:.07em;
+  margin:0;font:600 var(--t-micro) var(--sans);letter-spacing:.07em;
   text-transform:uppercase;color:var(--ink-low);
 }
 .deriv-out{font:700 var(--t-md) var(--mono);color:var(--ink-hi);white-space:nowrap}
 .deriv-out.warn{color:var(--tint-warn)} .deriv-out.bad{color:var(--tint-bad)}
 .deriv-sym{
-  font:400 var(--t-sm) var(--math,var(--mono));color:var(--ink-mid);
+  font:400 var(--t-sm) var(--math);color:var(--ink-mid);
   margin-top:var(--sp-1);line-height:1.5;
 }
 .deriv-num{
-  font:600 var(--t-sm) var(--math,var(--mono));color:var(--ink);
-  margin-top:2px;line-height:1.5;overflow-x:auto;
+  font:600 var(--t-sm) var(--math);color:var(--ink);
+  margin-top:var(--nudge);line-height:1.5;overflow-x:auto;
 }
 .deriv-num b{color:var(--ink-hi);font-weight:700}
-.deriv-why{font:400 var(--t-2xs) var(--sans);color:var(--ink-low);margin-top:var(--sp-1);line-height:1.55}
+.deriv-why{font:400 var(--t-micro) var(--sans);color:var(--ink-low);margin-top:var(--sp-1);line-height:1.55}
 .deriv.stale .deriv-num,.deriv.stale .deriv-out{color:var(--ink-low)}
 details.explain{margin:var(--sp-2) 0 0;border-top:1px solid var(--line-1);padding-top:var(--sp-1)}
 details.explain>summary{
   cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--sp-1);
-  font:600 var(--t-2xs) var(--sans);letter-spacing:.06em;text-transform:uppercase;
-  color:var(--ink-low);padding:2px 0;user-select:none;transition:color .14s var(--ease);
+  font:600 var(--t-micro) var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-low);padding:var(--nudge) 0;user-select:none;transition:color .14s var(--ease);
 }
 details.explain>summary::-webkit-details-marker{display:none}
 details.explain>summary::before{
@@ -730,7 +856,7 @@ details.explain[open]>summary::before{transform:rotate(90deg)}
 details.explain>summary:hover,details.explain>summary:focus-visible{color:var(--ink-hi)}
 details.explain>summary>b{
   font-weight:600;color:var(--ink-low);background:var(--s-panel);
-  border-radius:var(--r-round);padding:0 5px;font-size:9px;line-height:14px;
+  border-radius:var(--r-round);padding:0 var(--sp-1);font-size:var(--t-micro);line-height:14px;
 }
 details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
 @media (prefers-reduced-motion:reduce){
@@ -746,7 +872,7 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
 .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--seam);background:var(--line-1);border:1px solid var(--line-1);border-radius:var(--r);overflow:hidden}
 .tile{background:var(--s-raised);padding:var(--sp-2) var(--sp-3);min-width:0}
 .tile span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile b{display:block;margin-top:3px;font:500 var(--t-base) var(--mono);color:var(--ink-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile b{display:block;margin-top:var(--nudge);font:500 var(--t-base) var(--mono);color:var(--ink-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile b.good{color:var(--state-ok)} .tile b.warn{color:var(--alarm-med)}
 .tile b.bad{color:var(--alarm-high)} .tile b.accent{color:var(--accent)}
 .tiles.dense .tile b{font-size:var(--t-md)}
@@ -762,7 +888,7 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
 .reg-head{position:sticky;top:0;z-index:3;background:var(--s-chassis);border-bottom:1px solid var(--line-2)}
 .reg-row{border-bottom:1px solid var(--line-1);transition:background var(--dur-fast) var(--ease)}
 .reg-row:hover{background:var(--s-hover)}
-.reg-row.ro{background:rgba(248,75,75,.035)}
+.reg-row.ro{background:var(--alarm-high-wash)}
 .reg-row.staged{background:var(--alarm-med-bg);box-shadow:inset var(--spine-w) 0 var(--alarm-med)}
 .r-addr{font:600 var(--t-sm) var(--mono);color:var(--ink-mid)}
 .r-name{font:500 var(--t-sm) var(--sans);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -804,7 +930,7 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
 #stripCanvas{
   display:block;width:100%;background:var(--paper);
   border-radius:var(--r-tight);
-  box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 8px 22px rgba(0,0,0,.6);
+  box-shadow:var(--e-paper);
 }
 
 .plot{position:relative;height:240px;border:1px solid var(--line-1);border-radius:var(--r);background:var(--s-well);overflow:hidden;box-shadow:var(--recess)}
@@ -819,7 +945,7 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
   font:500 var(--t-xs) var(--mono);white-space:nowrap}
 .el-item b{color:var(--ink-hi);font:600 var(--t-sm) var(--mono)}
 .el-in{color:var(--ink-low);font:400 var(--t-micro) var(--mono)}
-.el-state{color:var(--ink-mid);font:500 var(--t-micro) var(--mono);margin-left:2px}
+.el-state{color:var(--ink-mid);font:500 var(--t-micro) var(--mono);margin-left:var(--nudge)}
 
 /* ==================================================================
    STATUS BAR — the instrument's bottom seam.
@@ -831,7 +957,7 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
   display:flex;align-items:center;padding:0;min-width:0;
   background:var(--s-panel);
   border-top:1px solid var(--line-2);
-  box-shadow:0 -1px 0 rgba(0,0,0,.4);
+  box-shadow:var(--e-footer);
   z-index:20;
 }
 .sb-group{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-4);height:100%;border-right:1px solid var(--line-1);white-space:nowrap;flex-shrink:0}
@@ -850,14 +976,14 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
   box-shadow:var(--recess),0 0 0 1px var(--line-2);
   transition:background var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
 }
-.led.on{background:var(--state-ok);box-shadow:0 0 0 1px rgba(99,207,155,.4),0 0 6px rgba(99,207,155,.35)}
+.led.on{background:var(--state-ok);box-shadow:var(--glow-ok)}
 /* HIGH priority: a detached electrode during a recording is the one
    state that must be seen from across the room. 2 Hz, 50% duty. */
-.led.off{background:var(--alarm-high);box-shadow:0 0 0 1px rgba(248,75,75,.5),0 0 8px rgba(248,75,75,.5);animation:alarmHigh 500ms steps(1,end) infinite}
+.led.off{background:var(--alarm-high);box-shadow:var(--glow-high);animation:alarmHigh 500ms steps(1,end) infinite}
 /* MEDIUM: 0.6 Hz */
-.led.suspect{background:var(--alarm-med);box-shadow:0 0 0 1px rgba(237,180,23,.45);animation:alarmMed 1667ms steps(1,end) infinite}
+.led.suspect{background:var(--alarm-med);box-shadow:var(--glow-med);animation:alarmMed 1667ms steps(1,end) infinite}
 /* LOW: steady */
-.led.unverified{background:var(--alarm-low);box-shadow:0 0 0 1px rgba(121,212,228,.42)}
+.led.unverified{background:var(--alarm-low);box-shadow:var(--glow-low)}
 .led.disabled{background:var(--s-well);box-shadow:var(--recess),0 0 0 1px var(--line-1)}
 
 @keyframes alarmHigh{0%,49.9%{opacity:1}50%,100%{opacity:.25}}
@@ -871,7 +997,8 @@ details.explain[open]>summary{color:var(--ink-mid);margin-bottom:var(--sp-1)}
    with the component that raised the alarm — it is the same condition,
    evaluated once. */
 body:has(.led.off) .app-header,
-body:has(.vital-tag.alert) .app-header{
+body:has(.vital-tag.alert) .app-header,
+body:has(.sband-cell[data-level="high"]) .app-header{
   box-shadow:inset 0 var(--spine-w) 0 0 var(--alarm-high),var(--e2);
   border-bottom-color:var(--alarm-high);
 }
@@ -881,7 +1008,7 @@ body:has(.vital-tag.alert) .app-header{
    moving and become invisible, so the alarm keeps its ring instead. */
 @media(prefers-reduced-motion:reduce){
   .led.off,.led.suspect,.vital-tag.alert,.dot.pending,.rec-dot.live{animation:none}
-  .led.off{box-shadow:0 0 0 2px var(--alarm-high),0 0 10px rgba(248,75,75,.6)}
+  .led.off{box-shadow:var(--glow-high-static)}
   .led.suspect{box-shadow:0 0 0 2px var(--alarm-med)}
   .vital-tag.alert{border-width:2px}
   .rec-dot.live{box-shadow:0 0 0 2px var(--alarm-high)}
@@ -898,12 +1025,12 @@ body:has(.vital-tag.alert) .app-header{
 .hud b.good{color:var(--state-ok)} .hud b.warn{color:var(--alarm-med)} .hud b.bad{color:var(--alarm-high)}
 #hudSpark{width:66px;height:14px;display:block;opacity:.9}
 .rec-dot{width:8px;height:8px;border-radius:50%;background:var(--s-well);flex-shrink:0;box-shadow:var(--recess),0 0 0 1px var(--line-2)}
-.rec-dot.live{background:var(--alarm-high);box-shadow:0 0 0 1px rgba(248,75,75,.5),0 0 8px rgba(248,75,75,.45);animation:alarmHigh 1000ms steps(1,end) infinite}
+.rec-dot.live{background:var(--alarm-high);box-shadow:var(--glow-rec);animation:alarmHigh 1000ms steps(1,end) infinite}
 
 /* ==================================================================
    MODALS
    ================================================================== */
-.scrim{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:var(--sp-6);background:rgba(4,5,7,.82)}
+.scrim{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:var(--sp-6);background:var(--scrim)}
 .scrim.open{display:flex;animation:fadeIn var(--dur-fast) var(--ease)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .modal{
@@ -914,6 +1041,9 @@ body:has(.vital-tag.alert) .app-header{
   animation:rise var(--dur) var(--ease-out);
 }
 .modal.wide{max-width:min(1180px,96vw)}
+.modal.narrow{width:min(680px,94vw)}
+.kbd-group{margin:var(--sp-2) 0 0;font:600 var(--t-micro) var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-low)}
+.kbd-group:first-child{margin-top:0}
 @keyframes rise{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
 .modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line-1);position:sticky;top:0;background:var(--s-panel);z-index:2}
 .modal-head h3{margin:0;font:600 var(--t-lg) var(--sans);letter-spacing:0;color:var(--ink-hi)}
@@ -926,7 +1056,7 @@ body:has(.vital-tag.alert) .app-header{
    COMMAND PALETTE — the power surface, and it should feel like the
    best-built thing in the product.
    ================================================================== */
-.palette-scrim{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:13vh;background:rgba(4,5,7,.76)}
+.palette-scrim{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:13vh;background:var(--scrim-palette)}
 .palette-scrim.open{display:flex;animation:fadeIn var(--dur-fast) var(--ease)}
 .palette{
   width:min(620px,94vw);background:var(--s-raised);
@@ -941,12 +1071,12 @@ body:has(.vital-tag.alert) .app-header{
 .palette-item.sel{background:var(--s-hover);border-color:var(--line-2);box-shadow:var(--e1)}
 .palette-item .pi-name{flex:1 1 auto;font:500 var(--t-md) var(--sans);color:var(--ink-hi);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .palette-item .pi-group{flex-shrink:0}
-.palette-item .pi-key{font:600 var(--t-micro) var(--mono);color:var(--ink-mid);border:1px solid var(--line-2);border-radius:var(--r-tight);padding:2px var(--sp-1);flex-shrink:0;background:var(--s-panel)}
+.palette-item .pi-key{font:600 var(--t-micro) var(--mono);color:var(--ink-mid);border:1px solid var(--line-2);border-radius:var(--r-tight);padding:var(--nudge) var(--sp-1);flex-shrink:0;background:var(--s-panel)}
 .palette-empty{padding:var(--sp-6);text-align:center;font:400 var(--t-md) var(--sans);color:var(--ink-low)}
 .kbd-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--sp-6)}
 .kbd-row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-2) 0;border-bottom:1px solid var(--line-1)}
 .kbd-row span{font:400 var(--t-sm) var(--sans);color:var(--ink)}
-.kbd-row b{font:600 var(--t-micro) var(--mono);color:var(--ink-mid);border:1px solid var(--line-2);border-radius:var(--r-tight);padding:2px var(--sp-2);white-space:nowrap;background:var(--s-panel)}
+.kbd-row b{font:600 var(--t-micro) var(--mono);color:var(--ink-mid);border:1px solid var(--line-2);border-radius:var(--r-tight);padding:var(--nudge) var(--sp-2);white-space:nowrap;background:var(--s-panel)}
 
 /* ==================================================================
    TOASTS
@@ -978,10 +1108,11 @@ body:has(.vital-tag.alert) .app-header{
 /* ==================================================================
    RESPONSIVE
    ================================================================== */
-@media(max-width:1560px){ :root{--rail-w:432px;--t-vital:46px} }
+@media(max-width:1560px){ :root{--rail-w:432px;--t-vital:46px} .brand-kicker{display:none} }
 @media(max-width:1360px){
   :root{--rail-w:388px;--t-vital:40px}
-  .hdr-strip .pill:nth-child(n+3){display:none}
+  .hdr-strip .pill:nth-child(n+2){display:none}
+  .sband-sub{display:none}
 }
 @media(max-width:1180px){
   body{overflow:auto;display:block;height:auto}
@@ -1050,6 +1181,33 @@ body:has(.vital-tag.alert) .app-header{
     <span class="pill" id="pillProto">PROTO —</span>
     <span class="pill" id="pillSps">500 SPS</span>
     <span class="pill" id="pillSpi">SCLK —</span>
+  </div>
+
+  <!-- The status band answers the two questions an operator asks the moment
+       they look up - is it recording, and is the signal good - in one place
+       and in the same order every time.  It mirrors state the console already
+       holds (renderStatusBand); it measures nothing itself. -->
+  <div class="status-band" id="statusBand" role="status" aria-label="Recorder status">
+    <div class="sband-cell" id="sbandRec" data-level="idle">
+      <span class="rec-dot" id="sbandRecDot" aria-hidden="true"></span>
+      <span class="sband-text"><span class="sband-label">Rec</span><b class="sband-value" id="sbandRecValue">—</b></span>
+      <span class="sband-sub" id="sbandRecSub">not connected</span>
+    </div>
+    <div class="sband-cell" id="sbandSignal" data-level="idle">
+      <span class="sband-mark" aria-hidden="true"></span>
+      <span class="sband-text"><span class="sband-label">Signal</span><b class="sband-value"><span class="sband-prio" id="sbandSignalPrio"></span><span id="sbandSignalValue">NO LINK</span></b></span>
+      <span class="sband-sub" id="sbandSignalSub">—</span>
+    </div>
+    <div class="sband-cell" id="sbandStream" data-level="idle">
+      <span class="sband-mark" aria-hidden="true"></span>
+      <span class="sband-text"><span class="sband-label">Stream</span><b class="sband-value" id="sbandStreamValue">—</b></span>
+      <span class="sband-sub" id="sbandStreamSub">—</span>
+    </div>
+    <div class="sband-cell" id="sbandCard" data-level="idle">
+      <span class="sband-mark" aria-hidden="true"></span>
+      <span class="sband-text"><span class="sband-label">Card</span><b class="sband-value" id="sbandCardValue">—</b></span>
+      <span class="sband-sub" id="sbandCardSub">—</span>
+    </div>
   </div>
 
   <div class="header-spacer"></div>
@@ -1202,7 +1360,7 @@ body:has(.vital-tag.alert) .app-header{
       <div class="tb-actions">
         <button class="btn sm" onclick="openModal('filterStudio')">DSP STUDIO</button>
         <button class="btn sm" onclick="openEcgStrip()">STRIP</button>
-        <button class="btn sm" id="btnFreeze" onclick="toggleFreeze()">FREEZE</button>
+        <button class="btn sm" id="btnFreeze" onclick="toggleFreeze()" aria-pressed="false">FREEZE</button>
         <button class="btn sm" onclick="clearGraphs()">CLEAR</button>
       </div>
     </div>
@@ -1224,7 +1382,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis1_ch1"></div>
-          <div class="canvas-wrap"><canvas id="bg1_ch1"></canvas><canvas id="fg1_ch1"></canvas></div>
+          <div class="canvas-wrap"><canvas id="bg1_ch1"></canvas><canvas id="fg1_ch1"></canvas><span class="well-scale" id="wellScale1_ch1" aria-hidden="true"></span></div>
           <div class="yaxis yaxis-code" id="yAxisCode_ch1" title="ADC code (LSB)"></div>
         </div>
       </article>
@@ -1239,6 +1397,7 @@ body:has(.vital-tag.alert) .app-header{
             <span class="badge normal" id="badgeCh1Processed">NORMAL</span>
           </div>
           <div class="chart-readout">
+            <span class="chart-unit" id="respReadout"></span>
             <span class="readout" id="val3_ch1" style="color:var(--sig-resp-filt)">0.000 mV</span>
             <button class="ghost-btn" title="Solo this trace" aria-label="Solo this trace" onclick="toggleSolo('card3_ch1')"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
@@ -1253,7 +1412,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis3_ch1"></div>
-          <div class="canvas-wrap"><canvas id="bg3_ch1"></canvas><canvas id="fg3_ch1"></canvas></div>
+          <div class="canvas-wrap"><canvas id="bg3_ch1"></canvas><canvas id="fg3_ch1"></canvas><span class="well-scale" id="wellScale3_ch1" aria-hidden="true"></span></div>
         </div>
       </article>
 
@@ -1273,7 +1432,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis1_ch2"></div>
-          <div class="canvas-wrap"><canvas id="bg1_ch2"></canvas><canvas id="fg1_ch2"></canvas></div>
+          <div class="canvas-wrap"><canvas id="bg1_ch2"></canvas><canvas id="fg1_ch2"></canvas><span class="well-scale" id="wellScale1_ch2" aria-hidden="true"></span></div>
           <div class="yaxis yaxis-code" id="yAxisCode_ch2" title="ADC code (LSB)"></div>
         </div>
       </article>
@@ -1303,7 +1462,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
         <div class="chart-body">
           <div class="yaxis" id="yAxis3_ch2"></div>
-          <div class="canvas-wrap"><canvas id="bg3_ch2"></canvas><canvas id="fg3_ch2"></canvas></div>
+          <div class="canvas-wrap"><canvas id="bg3_ch2"></canvas><canvas id="fg3_ch2"></canvas><span class="well-scale" id="wellScale3_ch2" aria-hidden="true"></span></div>
         </div>
       </article>
     </div>
@@ -1325,20 +1484,26 @@ body:has(.vital-tag.alert) .app-header{
       <div class="vital" id="clinicalMetricCh2" style="--vc:var(--sig-ecg-filt)">
         <div class="vital-head">
           <span class="vital-label">Heart rate</span>
-          <span class="vital-tag" id="hrQuality">LEARNING</span>
+          <span class="vital-flags">
+            <span class="qmeter" id="qmHr" role="img" aria-label="ECG contact quality not measured yet"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="vital-tag" id="hrQuality">LEARNING</span>
+          </span>
         </div>
         <div class="vital-meta">
-          <div class="vital-num-row"><span class="beat" id="beatHr"></span><span class="vital-num" id="valHR">--</span><span class="vital-unit">bpm</span></div>
+          <div class="vital-num-row"><span class="beat" id="beatHr"></span><span class="vital-num" id="valHR">--</span><span class="vital-unit">bpm</span><span class="vital-tag stale" id="hrStale" hidden>NO DATA</span></div>
         </div>
         <div class="tacho"><canvas id="tachoHr"></canvas><span class="tacho-cap">RR INTERVAL</span></div>
       </div>
       <div class="vital" id="clinicalMetricCh1" style="--vc:var(--sig-resp-filt)">
         <div class="vital-head">
           <span class="vital-label">Respiration</span>
-          <span class="vital-tag" id="rrQuality">LEARNING</span>
+          <span class="vital-flags">
+            <span class="qmeter" id="qmRr" role="img" aria-label="Breathing periodicity not measured yet"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="vital-tag" id="rrQuality">LEARNING</span>
+          </span>
         </div>
         <div class="vital-meta">
-          <div class="vital-num-row"><span class="beat" id="beatRr"></span><span class="vital-num" id="valBRPM">--</span><span class="vital-unit">brpm</span></div>
+          <div class="vital-num-row"><span class="beat" id="beatRr"></span><span class="vital-num" id="valBRPM">--</span><span class="vital-unit">brpm</span><span class="vital-tag stale" id="rrStale" hidden>NO DATA</span></div>
         </div>
         <div class="tacho"><canvas id="tachoRr"></canvas><span class="tacho-cap">BREATH</span></div>
       </div>
@@ -1546,7 +1711,7 @@ body:has(.vital-tag.alert) .app-header{
             <label class="ctl"><span>Signal path</span><select id="analysisSource" onchange="reanalyzeSnapshot()"><option value="input">Input-referred</option><option value="processed" selected>Processed display</option><option value="codes">Raw ADC codes</option></select></label>
             <label class="ctl"><span>FFT length</span><select id="analysisFftSize" onchange="reanalyzeSnapshot()"><option value="1024">1,024</option><option value="2048">2,048</option><option value="4096" selected>4,096</option><option value="8192">8,192</option></select></label>
             <label class="ctl"><span>Histogram bins</span><select id="analysisBins" onchange="reanalyzeSnapshot()"><option value="32">32</option><option value="64" selected>64</option><option value="128">128</option><option value="256">256</option></select></label>
-            <div class="ctl"><span>Client history</span><b class="mono" id="analysisBufferState" style="color:var(--accent);padding:6px 0;font-size:11px">0 samples</b></div>
+            <div class="ctl"><span>Client history</span><b class="mono" id="analysisBufferState" style="color:var(--accent);padding:var(--sp-2) 0;font-size:var(--t-sm)">0 samples</b></div>
           </div>
           <p class="note">Analysis freezes a private copy of the acquisition history. It never drains the display queues and never sends BLE commands, so the live sweep is unaffected.</p>
         </div>
@@ -1559,7 +1724,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
 
         <section id="anViewScope">
-          <div class="tiles c4 dense" style="margin-bottom:9px">
+          <div class="tiles c4 dense" style="margin-bottom:var(--sp-2)">
             <div class="tile"><span>Mean</span><b id="aMean">—</b></div>
             <div class="tile"><span>AC RMS</span><b id="aRms">—</b></div>
             <div class="tile"><span>Peak-to-peak</span><b id="aPp">—</b></div>
@@ -1573,7 +1738,7 @@ body:has(.vital-tag.alert) .app-header{
         </section>
 
         <section id="anViewHist" style="display:none">
-          <div class="tiles c4 dense" style="margin-bottom:9px">
+          <div class="tiles c4 dense" style="margin-bottom:var(--sp-2)">
             <div class="tile"><span>Median</span><b id="aMedian">—</b></div>
             <div class="tile"><span>Std deviation</span><b id="aStd">—</b></div>
             <div class="tile"><span>5th pct</span><b id="aP05">—</b></div>
@@ -1583,7 +1748,7 @@ body:has(.vital-tag.alert) .app-header{
         </section>
 
         <section id="anViewFft" style="display:none">
-          <div class="tiles c4 dense" style="margin-bottom:9px">
+          <div class="tiles c4 dense" style="margin-bottom:var(--sp-2)">
             <div class="tile"><span>Spectral peak</span><b id="aPeakHz">—</b></div>
             <div class="tile"><span>Resolution</span><b id="aResolution">—</b></div>
             <div class="tile"><span>Mains band</span><b id="aMains">—</b></div>
@@ -1600,7 +1765,7 @@ body:has(.vital-tag.alert) .app-header{
         <section id="anViewPhys" style="display:none">
           <div class="card">
             <h4>Signal quality</h4>
-            <b class="mono" id="aQuality" style="font-size:19px">—</b>
+            <b class="mono" id="aQuality" style="font-size:var(--t-xl)">—</b>
             <div class="bar"><i id="aQualityBar"></i></div>
           </div>
           <div class="tiles c4 dense">
@@ -1618,7 +1783,7 @@ body:has(.vital-tag.alert) .app-header{
             <div class="tile"><span>Recording length</span><b id="aNnSpan">&mdash;</b></div>
           </div>
 
-          <div class="grid2" style="margin-top:9px">
+          <div class="grid2" style="margin-top:var(--sp-2)">
             <div class="card">
               <h4>Poincar&eacute; &mdash; RR<sub>n</sub> vs RR<sub>n+1</sub></h4>
               <div class="plot" style="height:230px"><canvas id="analysisPoincareCanvas"></canvas></div>
@@ -1628,7 +1793,7 @@ body:has(.vital-tag.alert) .app-header{
               <div class="plot" style="height:230px"><canvas id="analysisHrvPsdCanvas"></canvas></div>
             </div>
           </div>
-          <div class="tiles c4 dense" style="margin-top:9px">
+          <div class="tiles c4 dense" style="margin-top:var(--sp-2)">
             <div class="tile"><span>VLF 0.003&ndash;0.04 Hz</span><b id="aVlf">&mdash;</b></div>
             <div class="tile"><span>LF 0.04&ndash;0.15 Hz</span><b id="aLf">&mdash;</b></div>
             <div class="tile"><span>HF 0.15&ndash;0.40 Hz</span><b id="aHf">&mdash;</b></div>
@@ -1676,7 +1841,7 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Cost per update</span><b id="mCost">&mdash;</b></div>
         </div>
         <div class="ctl" style="margin-top:8px"><span>Control</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center">
             <button class="btn sm primary" id="btnMathRun" onclick="toggleMathLive()">START</button>
             <button class="btn sm" onclick="resetMathLive()">RESET</button>
             <label class="field" style="margin:0"><span>Beats kept</span>
@@ -1729,7 +1894,7 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Ectopy in strip</span><b id="rhythmEctopy">&mdash;</b></div>
           <div class="tile"><span>QRS, median beat</span><b id="rhythmQrs">&mdash;</b></div>
         </div>
-        <p class="note" id="rhythmTags" style="margin:6px 0 0">&nbsp;</p>
+        <p class="note" id="rhythmTags" style="margin:var(--sp-2) 0 0">&nbsp;</p>
         <div class="plot" style="height:160px;margin-top:8px"><canvas id="rhythmStripCanvas"></canvas></div>
         <div class="plot" style="height:170px;margin-top:8px"><canvas id="rhythmBeatCanvas"></canvas></div>
         <div id="rhythmDerivations"></div>
@@ -1812,7 +1977,7 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Accepted</span><b id="mAccept">&mdash;</b></div>
           <div class="tile"><span>LF/HF</span><b id="mLfHf">&mdash;</b></div>
         </div>
-        <div class="grid2" style="margin-top:9px">
+        <div class="grid2" style="margin-top:var(--sp-2)">
           <div class="plot" style="height:220px"><canvas id="mathPoincareCanvas"></canvas></div>
           <div class="plot" style="height:220px"><canvas id="mathHrvCanvas"></canvas></div>
         </div>
@@ -1845,7 +2010,7 @@ body:has(.vital-tag.alert) .app-header{
             <input type="number" id="batCalInput" min="3.0" max="4.3" step="0.001" placeholder="e.g. 4.02"
                    oninput="previewBatteryCalibration()"></label>
           <div class="ctl"><span>Calibrate</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
               <button class="btn sm primary" onclick="calibrateBattery()">APPLY</button>
               <button class="btn sm" onclick="resetBatteryCalibration()">RESET 1.000</button>
               <button class="btn sm" onclick="sendCmd('BAT?')">REFRESH</button>
@@ -1872,9 +2037,9 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Verdict</span><b id="curveVerdict">—</b></div>
           <div class="tile span2"><span>Board log</span><b id="curveStatus">No log fetched. Press FETCH.</b></div>
         </div>
-        <canvas id="curveCanvas" height="150" style="width:100%;margin-top:9px;display:block"></canvas>
+        <canvas id="curveCanvas" height="150" style="width:100%;margin-top:var(--sp-2);display:block"></canvas>
         <div class="ctl" style="margin-top:8px"><span>Characterise</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
             <button class="btn sm" onclick="fetchPackCurve()">FETCH</button>
             <button class="btn sm primary" onclick="adoptPackCurve()">ADOPT</button>
             <button class="btn sm" onclick="exportPackCurve()">EXPORT</button>
@@ -1914,18 +2079,18 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Measured rate</span><b id="livePctH">—</b></div>
           <div class="tile"><span>On this pack</span><b id="liveLeft">—</b></div>
         </div>
-        <div class="tile" style="margin-top:6px"><span>Full charge would last</span><b id="liveProj">—</b></div>
+        <div class="tile" style="margin-top:var(--sp-2)"><span>Full charge would last</span><b id="liveProj">—</b></div>
         <p class="status-line" id="liveNote">Press GO LIVE and leave the board on battery.</p>
-        <table class="tbl" style="margin-top:9px">
+        <table class="tbl" style="margin-top:var(--sp-2)">
           <thead><tr><th>Window</th><th>Readings</th><th style="text-align:right">Draw</th></tr></thead>
           <tbody id="liveBody"><tr><td class="empty" colspan="3">Press GO LIVE and leave the board on battery.</td></tr></tbody>
         </table>
-        <table class="tbl" style="margin-top:9px">
+        <table class="tbl" style="margin-top:var(--sp-2)">
           <thead><tr><th style="width:22px"></th><th>Assumption</th><th style="text-align:right">Measured</th></tr></thead>
           <tbody id="liveChecks"><tr><td class="empty" colspan="3">No measurement running.</td></tr></tbody>
         </table>
         <div class="ctl" style="margin-top:8px"><span>Measure</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
             <button class="btn sm" id="btnLiveDraw" onclick="toggleLiveDraw()">GO LIVE</button>
             <button class="btn sm" onclick="restartTrend()">RESTART</button>
             <button class="btn sm" onclick="exportPowerReport()">EXPORT REPORT</button>
@@ -1969,14 +2134,14 @@ body:has(.vital-tag.alert) .app-header{
           <label class="ctl"><span>What is this segment testing?</span>
             <input type="text" id="abLabel" maxlength="40" placeholder="e.g. recording to SD"></label>
           <div class="ctl"><span>Run</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
               <button class="btn sm primary" onclick="abStart()">START</button>
               <button class="btn sm" onclick="abStop()">STOP &amp; SAVE</button>
               <button class="btn sm" onclick="abClearAll()">CLEAR</button>
             </div>
           </div>
         </div>
-        <table class="tbl" style="margin-top:9px">
+        <table class="tbl" style="margin-top:var(--sp-2)">
           <thead><tr><th>Segment</th><th>Length</th><th>Voltage band</th><th style="text-align:right">Draw</th></tr></thead>
           <tbody id="abBody"><tr><td class="empty" colspan="4">No segments yet. Label one, press START, and leave it running.</td></tr></tbody>
         </table>
@@ -2004,14 +2169,14 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Modelled total</span><b id="pwrModelTotal">—</b></div>
           <div class="tile"><span>Agreement</span><b id="pwrModelAgree">—</b></div>
         </div>
-        <table class="tbl" style="margin-top:9px">
+        <table class="tbl" style="margin-top:var(--sp-2)">
           <thead><tr><th>Consumer</th><th>Basis</th><th style="text-align:right">Estimate</th></tr></thead>
           <tbody id="pwrModelBody"><tr><td class="empty" colspan="3">Waiting for power telemetry from the board.</td></tr></tbody>
         </table>
         <div class="grid2" style="margin-top:8px">
           <label class="ctl"><span>microSD idle current (mA) — the one unknown</span>
             <input type="number" id="pwrSdIdle" min="0" max="20" step="0.05" value="1.00" onchange="saveSdIdle()">
-            <select id="pwrSdPreset" onchange="applySdPreset()" style="margin-top:4px">
+            <select id="pwrSdPreset" onchange="applySdPreset()" style="margin-top:4px" aria-label="Typical microSD idle currents">
               <option value="">Typical values…</option>
               <option value="0.20">Bare socket, card asleep — 0.20</option>
               <option value="1.00">Bare socket, card idle — 1.00</option>
@@ -2019,7 +2184,7 @@ body:has(.vital-tag.alert) .app-header{
               <option value="7.0">Breakout module, LED removed — 7.0</option>
             </select></label>
           <div class="ctl"><span>Solve it from the measurement</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
               <button class="btn sm primary" onclick="calibrateSdIdle()">CALIBRATE</button>
               <button class="btn sm" onclick="$('pwrSdIdle').value='1.00';saveSdIdle()">RESET 1.00</button>
             </div>
@@ -2076,7 +2241,7 @@ body:has(.vital-tag.alert) .app-header{
               <option value="32">32 ms</option>
             </select></label>
           <div class="ctl"><span>Profile</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
               <button class="btn sm" onclick="sendCmd('PWR:SAVER:1')">SAVER</button>
               <button class="btn sm" onclick="sendCmd('PWR:SAVER:0')">NORMAL</button>
               <button class="btn sm" onclick="sendCmd('PWR?')">SAMPLE NOW</button>
@@ -2186,7 +2351,7 @@ body:has(.vital-tag.alert) .app-header{
         </div>
 
         <div class="ctl" style="margin-top:8px"><span>Policy</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
             <button class="btn sm" id="ledBtnOff"    onclick="setLedMode('OFF')">ALL OFF</button>
             <button class="btn sm" id="ledBtnBeat"   onclick="setLedMode('HEARTBEAT')">HEARTBEAT</button>
             <button class="btn sm" id="ledBtnStatus" onclick="setLedMode('STATUS')">STEADY STATUS</button>
@@ -2204,7 +2369,7 @@ body:has(.vital-tag.alert) .app-header{
             <input type="number" id="ledBeatOn" min="2" max="2000" step="5" value="25"
                    onchange="applyLedBeat()"></label>
           <div class="ctl"><span>Identify this board</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
               <button class="btn sm" onclick="sendCmd('LED:TEST:R')">RED</button>
               <button class="btn sm" onclick="sendCmd('LED:TEST:G')">GREEN</button>
               <button class="btn sm" onclick="sendCmd('LED:TEST:B')">BLUE</button>
@@ -2244,7 +2409,7 @@ body:has(.vital-tag.alert) .app-header{
         <div class="status-line" id="sdMessage">Storage traffic wakes only on this tab; ECG packets always keep priority.</div>
       </div>
       <div class="page">
-        <div class="tiles" style="margin-bottom:11px">
+        <div class="tiles" style="margin-bottom:var(--sp-3)">
           <div class="tile"><span>SD state</span><b id="sdState">UNKNOWN</b></div>
           <div class="tile"><span>Current file</span><b id="sdCurrentFile">—</b></div>
           <div class="tile"><span>Write profile</span><b id="sdMode">—</b></div>
@@ -2257,8 +2422,8 @@ body:has(.vital-tag.alert) .app-header{
         <div class="card">
           <h4>Write cadence</h4>
           <div class="bar"><i id="sdBufBar"></i></div>
-          <canvas id="sdWriteTrace" height="96" style="width:100%;margin-top:9px;display:block"></canvas>
-          <div class="tiles" style="margin-top:9px">
+          <canvas id="sdWriteTrace" height="96" style="width:100%;margin-top:var(--sp-2);display:block"></canvas>
+          <div class="tiles" style="margin-top:var(--sp-2)">
             <div class="tile"><span>Burst buffer</span><b id="sdBufFill">&mdash;</b></div>
             <div class="tile"><span>Next write</span><b id="sdBufEta">&mdash;</b></div>
             <div class="tile"><span>Last write</span><b id="sdLastWrite">&mdash;</b></div>
@@ -2303,9 +2468,9 @@ body:has(.vital-tag.alert) .app-header{
               <select id="sessionFolder" onchange="selectSessionFolder()"><option value="/">/ (ROOT)</option></select>
             </label>
             <label class="ctl"><span>New folder</span><input type="text" id="newFolderName" maxlength="20" placeholder="e.g. TRIAL_A"></label>
-            <label class="ctl"><span>File ID</span><input type="text" id="patientId" maxlength="24" placeholder="e.g. NSR_A2_R60" oninput="fileIdConfirmed=false;confirmedFileName='';showConfirmedFileName()"><span class="note" id="confirmedFileName" style="font-size:9px"></span></label>
+            <label class="ctl"><span>File ID</span><input type="text" id="patientId" maxlength="24" placeholder="e.g. NSR_A2_R60" oninput="fileIdConfirmed=false;confirmedFileName='';showConfirmedFileName()"><span class="note" id="confirmedFileName" style="font-size:var(--t-micro)"></span></label>
             <div class="ctl"><span>Actions</span>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
                 <button class="btn sm" onclick="refreshFolderList()">FOLDERS</button>
                 <button class="btn sm" onclick="createSessionFolder()">CREATE</button>
                 <button class="btn sm primary" onclick="setPatientId()">SET ID</button>
@@ -2326,9 +2491,9 @@ body:has(.vital-tag.alert) .app-header{
             </div>
             <div class="ctl">
               <span>Timed</span>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input type="number" id="recordSec" min="1" max="86400" value="60" style="width:74px;text-align:center">
-                <span class="mono" style="color:var(--ink-4);font-size:9px">sec</span>
+              <div style="display:flex;gap:var(--sp-2);align-items:center">
+                <input type="number" id="recordSec" min="1" max="86400" value="60" style="width:74px;text-align:center" aria-label="Timed recording length, seconds">
+                <span class="mono" style="color:var(--ink-low);font-size:var(--t-micro)">sec</span>
                 <button class="btn record" id="btnAutoRec" onclick="triggerAutoRecord()" style="flex:1">● AUTO REC</button>
               </div>
               <p class="note" style="margin-top:4px">Stops itself and writes the footer automatically.</p>
@@ -2372,14 +2537,14 @@ body:has(.vital-tag.alert) .app-header{
       <div class="page">
         <div class="card">
           <h4>ADS1292R SPI link</h4>
-          <div class="tiles c4 dense" style="margin-bottom:10px">
+          <div class="tiles c4 dense" style="margin-bottom:var(--sp-2)">
             <div class="tile"><span>Actual SCLK</span><b id="spiHzTile" class="accent">—</b></div>
             <div class="tile"><span>Frame time</span><b id="spiFrameTile">—</b></div>
             <div class="tile"><span>ISR load</span><b id="spiLoadTile">—</b></div>
             <div class="tile"><span>Framing errors</span><b id="spiErrTile">—</b></div>
           </div>
           <div class="bar"><i id="spiLoadBar"></i></div>
-          <div class="grid2" style="margin-top:11px">
+          <div class="grid2" style="margin-top:var(--sp-3)">
             <label class="ctl"><span>Requested SCLK</span>
               <select id="spiSpeedSelect">
                 <option value="125000">125 kHz</option>
@@ -2399,17 +2564,17 @@ body:has(.vital-tag.alert) .app-header{
             </label>
             <div class="ctl span2">
               <span>Actions</span>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap">
                 <button class="btn sm primary" onclick="applySpiSettings()">APPLY</button>
                 <button class="btn sm" id="btnSpiTest" onclick="runSpiSweep()">RUN LINK TEST</button>
                 <button class="btn sm" id="btnSpiApplyBest" onclick="applyRecommendedSpi()" disabled>APPLY RECOMMENDED</button>
                 <button class="btn sm" onclick="forgetSpiChoice()">FORGET</button>
               </div>
-              <p class="status-line" id="spiConfLine" style="margin-top:6px">No frames checked at this clock yet.</p>
-              <p class="status-line" id="spiRememberLine" style="margin-top:6px">The board boots at 250 kHz every time; nothing is remembered yet.</p>
+              <p class="status-line" id="spiConfLine" style="margin-top:var(--sp-2)">No frames checked at this clock yet.</p>
+              <p class="status-line" id="spiRememberLine" style="margin-top:var(--sp-2)">The board boots at 250 kHz every time; nothing is remembered yet.</p>
             </div>
           </div>
-          <table class="tbl" style="margin-top:11px">
+          <table class="tbl" style="margin-top:var(--sp-3)">
             <thead><tr><th>SCLK</th><th>Errors / trials</th><th>Frame</th><th>Verdict</th></tr></thead>
             <tbody id="spiSweepBody"><tr><td class="empty" colspan="4">No sweep run yet.</td></tr></tbody>
           </table>
@@ -2485,8 +2650,8 @@ body:has(.vital-tag.alert) .app-header{
 
         <div class="card">
           <h4>Command console</h4>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input type="text" id="manualCommand" placeholder="type a command, e.g. REG?" style="flex:1;background:var(--panel-2);color:var(--ink);border:1px solid var(--hair-2);border-radius:var(--r-xs);padding:6px 8px;font:600 10px var(--mono);outline:none" onkeydown="if(event.key==='Enter')sendManualCommand()">
+          <div style="display:flex;gap:var(--sp-2);margin-bottom:8px">
+            <input type="text" id="manualCommand" aria-label="Manual command to the recorder" placeholder="type a command, e.g. REG?" style="flex:1;background:var(--s-raised);color:var(--ink);border:1px solid var(--line-2);border-radius:var(--r-tight);padding:var(--sp-1) var(--sp-2);font:600 var(--t-xs) var(--mono);outline:none" onkeydown="if(event.key==='Enter')sendManualCommand()">
             <button class="btn sm primary" onclick="sendManualCommand()">SEND</button>
           </div>
           <div class="log" id="consoleLog"></div>
@@ -2543,13 +2708,10 @@ body:has(.vital-tag.alert) .app-header{
 <!-- ================================================================
      MODALS
      ================================================================ -->
-<div class="scrim" id="ecgStrip" role="dialog" aria-modal="true">
+<div class="scrim" id="ecgStrip" role="dialog" aria-modal="true" aria-labelledby="ecgStripTitle">
   <div class="modal wide">
-    <div class="modal-head"><h3>ECG rhythm strip</h3>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn sm" onclick="exportStripPng()">SAVE PNG</button>
-        <button class="btn sm" onclick="closeModal('ecgStrip')">CLOSE</button>
-      </div>
+    <div class="modal-head"><h3 id="ecgStripTitle">ECG rhythm strip</h3>
+      <button class="btn sm" onclick="closeModal('ecgStrip')" aria-label="Close dialog">CLOSE</button>
     </div>
     <div class="modal-body">
       <div class="toolbar" style="margin:0;grid-column:1/-1">
@@ -2586,19 +2748,22 @@ body:has(.vital-tag.alert) .app-header{
             <option value="0">Hide</option>
           </select>
         </label>
-        <button class="btn sm primary" onclick="drawEcgStrip()">REFRESH</button>
       </div>
-      <div id="stripHost" style="grid-column:1/-1;background:#fff;border-radius:8px;padding:6px;overflow:auto">
+      <div id="stripHost" style="grid-column:1/-1;background:var(--paper);border-radius:var(--r);padding:var(--sp-2);overflow:auto">
         <canvas id="stripCanvas" style="display:block"></canvas>
       </div>
       <div class="status-line" id="stripStatus" style="grid-column:1/-1">Reading the rolling buffer&hellip;</div>
+      <div class="modal-foot">
+        <button class="btn" onclick="exportStripPng()">SAVE PNG</button>
+        <button class="btn primary" onclick="drawEcgStrip()">REFRESH</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="scrim" id="filterStudio" role="dialog" aria-modal="true">
+<div class="scrim" id="filterStudio" role="dialog" aria-modal="true" aria-labelledby="filterStudioTitle">
   <div class="modal">
-    <div class="modal-head"><h3>DSP Filter Studio</h3><button class="btn sm" onclick="closeModal('filterStudio')">CLOSE</button></div>
+    <div class="modal-head"><h3 id="filterStudioTitle">DSP Filter Studio</h3><button class="btn sm" onclick="closeModal('filterStudio')" aria-label="Close dialog">CLOSE</button></div>
     <div class="modal-body">
       <section class="card" style="margin:0">
         <h4>ECG display path</h4>
@@ -2637,9 +2802,9 @@ body:has(.vital-tag.alert) .app-header{
   </div>
 </div>
 
-<div class="scrim" id="fileInspector" role="dialog" aria-modal="true">
+<div class="scrim" id="fileInspector" role="dialog" aria-modal="true" aria-labelledby="fileInspectorTitle">
   <div class="modal">
-    <div class="modal-head"><h3>ECG File Inspector</h3><button class="btn sm" onclick="closeModal('fileInspector')">CLOSE</button></div>
+    <div class="modal-head"><h3 id="fileInspectorTitle">ECG File Inspector</h3><button class="btn sm" onclick="closeModal('fileInspector')" aria-label="Close dialog">CLOSE</button></div>
     <div class="modal-body wide">
       <section>
         <div class="tiles c2 dense">
@@ -2652,12 +2817,12 @@ body:has(.vital-tag.alert) .app-header{
           <div class="tile"><span>Start</span><b id="fiStart">—</b></div>
           <div class="tile"><span>Channels</span><b id="fiChannels">—</b></div>
         </div>
-        <div class="card" style="margin-top:10px">
+        <div class="card" style="margin-top:var(--sp-2)">
           <h4>Register snapshot</h4>
-          <div class="mono" id="fiRegisters" style="font-size:9px;line-height:1.8;color:var(--ink-3);word-break:break-all">—</div>
+          <div class="mono" id="fiRegisters" style="font-size:var(--t-micro);line-height:1.8;color:var(--ink-mid);word-break:break-all">—</div>
         </div>
         <div class="callout" id="fiIntegrity">Waiting for header…</div>
-        <div class="tiles c2 dense" id="fiEnding" style="margin-top:10px">
+        <div class="tiles c2 dense" id="fiEnding" style="margin-top:var(--sp-2)">
           <div class="tile"><span>Stopped because</span><b id="fiStop">—</b></div>
           <div class="tile"><span>Measured rate</span><b id="fiSpsm">—</b></div>
           <div class="tile"><span>Battery start → end</span><b id="fiBattery">—</b></div>
@@ -2665,32 +2830,54 @@ body:has(.vital-tag.alert) .app-header{
         </div>
       </section>
       <section>
-        <div class="status-line" id="filePreviewStatus" style="margin-bottom:7px">Requesting a graph-priority preview…</div>
+        <div class="status-line" id="filePreviewStatus" style="margin-bottom:var(--sp-2)">Requesting a graph-priority preview…</div>
         <div class="plot" style="height:300px"><canvas id="filePreviewCanvas"></canvas></div>
       </section>
+      <div class="modal-foot">
+        <button class="btn primary" onclick="closeModal('fileInspector')">DONE</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="scrim" id="shortcutHelp" role="dialog" aria-modal="true">
-  <div class="modal" style="width:min(680px,94vw)">
-    <div class="modal-head"><h3>Keyboard</h3><button class="btn sm" onclick="closeModal('shortcutHelp')">CLOSE</button></div>
+<div class="scrim" id="shortcutHelp" role="dialog" aria-modal="true" aria-labelledby="shortcutHelpTitle">
+  <div class="modal narrow">
+    <div class="modal-head"><h3 id="shortcutHelpTitle">Keyboard</h3><button class="btn sm" onclick="closeModal('shortcutHelp')" aria-label="Close dialog">CLOSE</button></div>
     <div class="modal-body single">
+      <h4 class="kbd-group">Anywhere</h4>
       <div class="kbd-grid">
-        <div class="kbd-row"><span>Command palette</span><b>Ctrl / ⌘ + K</b></div>
+        <div class="kbd-row"><span>Command palette — every action by name</span><b>Ctrl / ⌘ + K</b></div>
+        <div class="kbd-row"><span>Connect / disconnect</span><b>Ctrl / ⌘ + Enter</b></div>
+        <div class="kbd-row"><span>Close dialog</span><b>Esc</b></div>
+        <div class="kbd-row"><span>Next / previous control</span><b>Tab / Shift + Tab</b></div>
+      </div>
+      <h4 class="kbd-group">Display</h4>
+      <div class="kbd-grid">
         <div class="kbd-row"><span>Freeze / resume display</span><b>Space</b></div>
         <div class="kbd-row"><span>Clear all traces</span><b>C</b></div>
-        <div class="kbd-row"><span>Connect / disconnect</span><b>Ctrl + Enter</b></div>
-        <div class="kbd-row"><span>Inspector tabs 1–5</span><b>1 … 5</b></div>
-        <div class="kbd-row"><span>Solo trace 1–4</span><b>Shift + 1 … 4</b></div>
+        <div class="kbd-row"><span>Sweep window shorter / longer</span><b>[ / ]</b></div>
+        <div class="kbd-row"><span>Compact / comfortable density</span><b>D</b></div>
+        <div class="kbd-row"><span>Solo RESP · RESP F · ECG · ECG F</span><b>Shift + 1 … 4</b></div>
         <div class="kbd-row"><span>Exit solo</span><b>Shift + 0</b></div>
-        <div class="kbd-row"><span>Sweep speed − / +</span><b>[ / ]</b></div>
-        <div class="kbd-row"><span>Toggle compact density</span><b>D</b></div>
-        <div class="kbd-row"><span>This panel</span><b>?</b></div>
-        <div class="kbd-row"><span>Close dialog</span><b>Esc</b></div>
-        <div class="kbd-row"><span>Record (Storage tab)</span><b>R</b></div>
       </div>
-      <p class="callout" style="grid-column:1/-1">Shortcuts are ignored while a text field or dropdown has focus, so typing a file ID or a manual command never triggers them.</p>
+      <h4 class="kbd-group">Inspector tabs</h4>
+      <div class="kbd-grid">
+        <div class="kbd-row"><span>Signal · Registers · Analysis</span><b>1 · 2 · 3</b></div>
+        <div class="kbd-row"><span>Storage · Link</span><b>4 · 5</b></div>
+        <div class="kbd-row"><span>Math · Power · LED</span><b>6 · 7 · 8</b></div>
+        <div class="kbd-row"><span>Record (with the Storage tab open)</span><b>R</b></div>
+        <div class="kbd-row"><span>This panel</span><b>?</b></div>
+      </div>
+      <h4 class="kbd-group">In the command palette</h4>
+      <div class="kbd-grid">
+        <div class="kbd-row"><span>Move through the matches</span><b>↑ / ↓</b></div>
+        <div class="kbd-row"><span>Run the highlighted action</span><b>Enter</b></div>
+        <div class="kbd-row"><span>Close the palette</span><b>Esc</b></div>
+      </div>
+      <p class="callout" style="grid-column:1/-1">Shortcuts are ignored while a text field or dropdown has focus, so typing a file ID or a manual command never triggers them. Inside a dialog, Tab stays inside it; closing it returns focus to where you were.</p>
+      <div class="modal-foot">
+        <button class="btn primary" onclick="closeModal('shortcutHelp')">DONE</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2700,7 +2887,7 @@ body:has(.vital-tag.alert) .app-header{
      ================================================================ -->
 <div class="palette-scrim" id="paletteScrim" role="dialog" aria-modal="true">
   <div class="palette">
-    <input id="paletteInput" type="text" placeholder="Run a command…  (registers, record, sweep, spi test, export)" autocomplete="off" spellcheck="false">
+    <input id="paletteInput" type="text" aria-label="Search commands" placeholder="Run a command…  (registers, record, sweep, spi test, export)" autocomplete="off" spellcheck="false">
     <div class="palette-list" id="paletteList"></div>
   </div>
 </div>
@@ -2722,40 +2909,68 @@ body:has(.vital-tag.alert) .app-header{
    ================================================================== */
 const PALETTE = (() => {
   const cs = getComputedStyle(document.documentElement);
-  const v = (name, fallback) => {
-    const got = cs.getPropertyValue(name).trim();
-    return got || fallback;
-  };
+  const v = name => cs.getPropertyValue(name).trim();
   return {
-    well:        v('--s-well',        'rgb(10,11,13)'),
-    chassis:     v('--s-chassis',     'rgb(16,18,20)'),
-    panel:       v('--s-panel',       'rgb(23,24,27)'),
-    raised:      v('--s-raised',      'rgb(30,31,34)'),
-    inkHi:       v('--ink-hi',        'rgb(209,213,217)'),
-    ink:         v('--ink',           'rgb(171,175,179)'),
-    inkMid:      v('--ink-mid',       'rgb(147,151,155)'),
-    inkLow:      v('--ink-low',       'rgb(125,129,133)'),
-    inkFaint:    v('--ink-faint',     'rgb(97,101,105)'),
-    accent:      v('--accent',        'rgb(192,163,255)'),
-    resp:        v('--sig-resp',      'rgb(255,172,82)'),
-    respFilt:    v('--sig-resp-filt', 'rgb(224,190,139)'),
-    ecg:         v('--sig-ecg',       'rgb(90,226,157)'),
-    ecgFilt:     v('--sig-ecg-filt',  'rgb(120,214,217)'),
-    alarmHigh:   v('--alarm-high',    'rgb(248,75,75)'),
-    alarmMed:    v('--alarm-med',     'rgb(237,180,23)'),
-    alarmLow:    v('--alarm-low',     'rgb(121,212,228)'),
-    ok:          v('--state-ok',      'rgb(99,207,155)'),
-    gridMinor:   v('--grid-minor',    'rgba(248,75,75,.055)'),
-    gridMajor:   v('--grid-major',    'rgba(248,75,75,.132)'),
-    gridEng:     v('--grid-eng',      'rgba(209,213,217,.07)'),
-    gridEngMaj:  v('--grid-eng-major','rgba(209,213,217,.15)'),
+    well:        v('--s-well'),
+    chassis:     v('--s-chassis'),
+    panel:       v('--s-panel'),
+    raised:      v('--s-raised'),
+    inkHi:       v('--ink-hi'),
+    ink:         v('--ink'),
+    inkMid:      v('--ink-mid'),
+    inkLow:      v('--ink-low'),
+    inkFaint:    v('--ink-faint'),
+    accent:      v('--accent'),
+    resp:        v('--sig-resp'),
+    respFilt:    v('--sig-resp-filt'),
+    ecg:         v('--sig-ecg'),
+    ecgFilt:     v('--sig-ecg-filt'),
+    alarmHigh:   v('--alarm-high'),
+    alarmMed:    v('--alarm-med'),
+    alarmLow:    v('--alarm-low'),
+    ok:          v('--state-ok'),
+    gridMinor:   v('--grid-minor'),
+    gridMajor:   v('--grid-major'),
+    gridEng:     v('--grid-eng'),
+    gridEngMaj:  v('--grid-eng-major'),
+    cursor:      v('--cursor'),
     /* the rhythm strip is a print surface and carries its own palette */
-    paper:       v('--paper',         'rgb(255,255,255)'),
-    paperInk:    v('--paper-ink',     'rgb(20,23,26)'),
-    paperMark:   v('--paper-mark',    'rgb(28,122,104)'),
-    paperLabel:  v('--paper-label',   'rgb(90,101,112)'),
+    paper:       v('--paper'),
+    paperInk:    v('--paper-ink'),
+    paperMark:   v('--paper-mark'),
+    paperLabel:  v('--paper-label'),
+    paperGridMinor: v('--paper-grid-minor'),
+    paperGridMajor: v('--paper-grid-major'),
+    /* canvas text uses the same stacks as the chrome; applyTypeface()
+       refreshes these when the face changes */
+    mono:        v('--mono'),
+    sans:        v('--sans'),
   };
 })();
+
+/* A token at a given opacity, for canvas strokes and fills. The V4 file
+   wrote these as rgba() literals in the drawing code - 112 of them, most in
+   V3's blue-grey, which put chroma back into a chassis the tokens had made
+   achromatic. Resolved once per (token, alpha) and cached, so the render
+   loop pays a Map lookup, not a style read. */
+const TONE_CACHE = new Map();
+function tone(token, alpha) {
+  const key = token + '|' + alpha;
+  const hit = TONE_CACHE.get(key);
+  if (hit) return hit;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  let r = 0, g = 0, b = 0, a = 1;
+  if (raw.charAt(0) === '#') {
+    const h = raw.length === 4 ? raw.slice(1).split('').map(c => c + c).join('') : raw.slice(1, 7);
+    r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16);
+  } else {
+    const parts = (raw.match(/[\d.]+/g) || []).map(Number);
+    [r = 0, g = 0, b = 0] = parts; if (parts.length > 3) a = parts[3];
+  }
+  const out = `rgba(${r},${g},${b},${+(a * alpha).toFixed(3)})`;
+  TONE_CACHE.set(key, out);
+  return out;
+}
 
 /* ==================================================================
    RR TACHOGRAM — the element that says "Holter" rather than "monitor".
@@ -2917,8 +3132,35 @@ function logLine(kind, text) {
 }
 function clearConsoleLog() { const h = $('consoleLog'); if (h) h.replaceChildren(); }
 
-function openModal(id) { $(id).classList.add('open'); if (id === 'fileInspector') requestAnimationFrame(drawFilePreview); }
-function closeModal(id) { $(id).classList.remove('open'); }
+/* A dialog takes focus when it opens, keeps it while it is open (the Tab
+   trap is in the document key handler) and gives it back to whatever opened
+   it when it closes, so a keyboard user is never left behind the scrim. */
+const modalReturnFocus = new Map();
+function modalFocusables(root) {
+  return [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+function topOpenModal() {
+  return MODAL_IDS.map(id => $(id)).filter(el => el && el.classList.contains('open')).pop() || null;
+}
+function openModal(id) {
+  const scrim = $(id); if (!scrim) return;
+  if (!scrim.classList.contains('open')) modalReturnFocus.set(id, document.activeElement);
+  scrim.classList.add('open');
+  if (id === 'fileInspector') requestAnimationFrame(drawFilePreview);
+  // synchronously: the scrim is displayed the moment the class lands, and a
+  // deferred focus would be skipped wherever frames are throttled
+  const f = modalFocusables(scrim); if (f.length) f[0].focus();
+}
+function closeModal(id) {
+  const scrim = $(id); if (!scrim) return;
+  const wasOpen = scrim.classList.contains('open');
+  scrim.classList.remove('open');
+  if (wasOpen) {
+    const back = modalReturnFocus.get(id); modalReturnFocus.delete(id);
+    if (back && document.contains(back) && typeof back.focus === 'function') back.focus();
+  }
+}
 
 /* ==================================================================
    1. MEDICAL DSP
@@ -4798,7 +5040,7 @@ function drawWriteTrace() {
   canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
   const g = canvas.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = 'rgba(10,15,22,.85)'; g.fillRect(0, 0, w, h);
+  g.fillStyle = tone('--s-well', .85); g.fillRect(0, 0, w, h);
 
   const list = sdWrite.durations;
   const pad = 16;
@@ -4806,14 +5048,14 @@ function drawWriteTrace() {
   const peak = list.length ? Math.max(...list.map(d => d.ms)) : 0;
   const top = Math.max(10, peak*1.18);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
   g.beginPath();
   for (const frac of [0.33, 0.66]) { const y = Math.round(pad + (h-pad)*frac)+0.5; g.moveTo(0, y); g.lineTo(w, y); }
   g.stroke();
 
   if (list.length < 3) {
-    g.fillStyle = 'rgba(146,176,210,.5)';
-    g.font = '600 10px ui-monospace, monospace';
+    g.fillStyle = tone('--ink-mid', .5);
+    g.font = `600 10px ${PALETTE.mono}`;
     g.fillText(list.length === 0
       ? 'waiting for the first write'
       : `${list.length} write${list.length === 1 ? '' : 's'} so far — a Holter burst lands every ~7.5 s`,
@@ -4827,7 +5069,7 @@ function drawWriteTrace() {
 
   if (Number.isFinite(med)) {
     const y = Math.round(yOf(med))+0.5;
-    g.strokeStyle = 'rgba(61,220,151,.45)';
+    g.strokeStyle = tone('--sig-ecg', .45);
     g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
     g.setLineDash([]);
   }
@@ -4835,8 +5077,8 @@ function drawWriteTrace() {
     const x = Math.round(x0 + i*step) + 0.5;
     // A bar that is really several writes averaged is drawn faint, so a
     // busy second is never mistaken for one unusually slow write.
-    g.strokeStyle = !d.exact ? 'rgba(146,176,210,.35)'
-                  : d.ms > med*2.5 ? 'rgb(240,158,74)' : 'rgb(61,220,151)';
+    g.strokeStyle = !d.exact ? tone('--ink-mid', .35)
+                  : d.ms > med*2.5 ? PALETTE.resp : PALETTE.ecg;
     g.lineWidth = Math.max(1, step - 1.2);
     g.beginPath(); g.moveTo(x, h - 4); g.lineTo(x, yOf(d.ms)); g.stroke();
   });
@@ -4844,8 +5086,8 @@ function drawWriteTrace() {
   // h - 3 - (h - 14) is 11 for every h, so the run summary was being drawn
   // on top of the axis maximum at exactly the same point - which is why the
   // corner read "30writes . median 13 ms". Two lines, two rows.
-  g.fillStyle = 'rgba(146,176,210,.65)';
-  g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .65);
+  g.font = `600 9px ${PALETTE.mono}`;
   g.fillText(`${top.toFixed(0)} ms`, 4, 11);
   const label = 'card busy per write';
   g.fillText(label, w - g.measureText(label).width - 5, 11);
@@ -4854,7 +5096,9 @@ function drawWriteTrace() {
              4, h - 6);
 }
 
+let lastSdTelemetryAt = 0;          // presentation only: how old the recorder's last report is
 function updateSdTelemetry(f) {
+  lastSdTelemetryAt = performance.now();
   const state = f.STATE || 'UNKNOWN', recording = f.REC === '1';
   const stateEl = $('sdState');
   stateEl.textContent = state;
@@ -5178,10 +5422,10 @@ function drawFilePreview() {
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   const width = rect.width, height = rect.height;
   ctx.fillStyle = PALETTE.well; ctx.fillRect(0,0,width,height);
-  ctx.strokeStyle = 'rgba(150,182,216,.10)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = tone('--ink-mid', .10); ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) { const x = i*width/8; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,height); ctx.stroke(); }
   for (let i = 0; i <= 4; i++) { const y = i*height/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(width,y); ctx.stroke(); }
-  ctx.fillStyle = 'rgba(150,182,216,.55)'; ctx.font = "9px 'JetBrains Mono',monospace";
+  ctx.fillStyle = tone('--ink-mid', .55); ctx.font = `9px ${PALETTE.mono}`;
   ctx.fillText('CH1 · RESP RAW OVERVIEW', 8, 13);
   ctx.fillText('CH2 · ECG RAW OVERVIEW', 8, height/2+13);
   const lane = (values, color, top, laneHeight) => {
@@ -5200,13 +5444,13 @@ function drawFilePreview() {
       if (!pen) { ctx.moveTo(x,y); pen = true; } else ctx.lineTo(x,y);
     }
     ctx.stroke();
-    ctx.fillStyle = color; ctx.font = "8px 'JetBrains Mono',monospace";
+    ctx.fillStyle = color; ctx.font = `9px ${PALETTE.mono}`;
     ctx.fillText(`${min.toFixed(0)} … ${max.toFixed(0)} ADC`, width-124, top+13);
   };
   lane(filePreviewCh1, PALETTE.resp, 0, height/2);
   lane(filePreviewCh2, PALETTE.ecg, height/2, height/2);
   if (filePreviewReceived < 2) {
-    ctx.fillStyle = 'rgba(150,182,216,.5)'; ctx.font = "11px Inter,sans-serif"; ctx.textAlign = 'center';
+    ctx.fillStyle = tone('--ink-mid', .5); ctx.font = `11px ${PALETTE.sans}`; ctx.textAlign = 'center';
     ctx.fillText('Preview data will appear here', width/2, height/2);
     ctx.textAlign = 'left';
   }
@@ -5284,6 +5528,7 @@ function buildRegisterMap() {
     const hexCell = document.createElement('div'); hexCell.className = 'r-hex';
     const input = document.createElement('input');
     input.id = 'hex_' + reg.addr; input.value = toHexStr(reg.def); input.maxLength = 4;
+    input.setAttribute('aria-label', `${reg.name} register ${toHexStr(reg.addr)}, hex value`);
     if (readOnly) input.readOnly = true; else input.onchange = () => hexInputChanged(reg.addr);
     hexCell.appendChild(input);
 
@@ -5849,6 +6094,17 @@ function switchSub(subId) {
    counts run to ±8.4 M, mV traces to a few millivolts, and both share this
    gutter — a fixed 2-decimal format made the first case unreadable and the
    second imprecise. */
+// Significant figures without exponent notation, for scale labels.
+function formatSig(value, digits) {
+  if (!Number.isFinite(value) || value === 0) return '0';
+  return String(+value.toPrecision(digits));
+}
+// The 1-2-5 series step nearest above a raw step.
+function niceStep(raw) {
+  if (!(raw > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw/p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10)*p;
+}
 function formatAxisValue(value, step) {
   if (!Number.isFinite(value)) return '—';
   const magnitude = Math.abs(step);
@@ -5916,6 +6172,8 @@ class TurboSweepChart {
     this.minSpan = options.minSpan || 0;         // smallest span the autoscaler may zoom into
     this.decim = 1; this.decimCount = 0; this.decimSum = 0;
     this.codeAxisDiv = options.codeAxisId ? $(options.codeAxisId) : null;
+    this.scaleTagEl = options.scaleTagId ? $(options.scaleTagId) : null;
+    this.scaleTagText = '';
     this.codeAxisOn = false; this.codeAxisText = ''; this.lsbMv = 0;
     this.gridMode = 'clinical';
     this.paperMvSpan = 0;                        // 0 = autoscale, >0 = fixed mV span
@@ -5971,7 +6229,7 @@ class TurboSweepChart {
     const next = Math.max(64, Math.min(16000, Math.round(this.width/pixelsPerSample)));
     if (next !== this.visibleSamples) { this.visibleSamples = next; this.allocateColumns(); this.scaleReady = false; }
     this.sampleStep = this.width/Math.max(1, this.visibleSamples);
-    this.needsFullRepaint = true; this.drawGrid();
+    this.needsFullRepaint = true; this.drawGrid(); this.updateScaleTag();
   }
   // A calibrated chart in paper mode stops autoscaling: the whole point of
   // 10 mm/mV is that the same deflection means the same voltage every time you
@@ -5981,6 +6239,7 @@ class TurboSweepChart {
     if (next === this.paperMvSpan) return;
     this.paperMvSpan = next;
     this.scaleReady = false; this.drawnScaleValid = false; this.needsFullRepaint = true;
+    this.updateScaleTag();
   }
   // Seconds across the canvas. A respiration window can be a minute - more
   // samples than the ring holds - so that chart averages blocks of samples into
@@ -5992,6 +6251,23 @@ class TurboSweepChart {
     const decim = this.respiration ? Math.max(1, Math.floor(seconds*fs/Math.max(64, this.width*4))) : 1;
     if (decim !== this.decim) { this.decim = decim; this.decimCount = 0; this.decimSum = 0; }
     this.setScanSpeed(this.width*decim/(fs*seconds));
+  }
+  // The picture's scale, on the picture: see .well-scale.  Called when the
+  // window, the paper or the painted span changes - never per frame.
+  updateScaleTag() {
+    if (!this.scaleTagEl || !this.width) return;
+    const seconds = this.visibleSamples*this.decim/Math.max(1, currentSps);
+    const speed = paperSpeedMmPerSec();
+    const time = speed > 0 ? `${formatSig(this.width/(pxPerMm()*seconds), 3)} mm/s` : `${formatSig(seconds, 2)} s`;
+    let amp = '';
+    if (this.paperMvSpan > 0 && paperGainMmPerMv() > 0) amp = `${paperGainMmPerMv()} mm/mV`;
+    else if (this.drawnScaleValid) {
+      const div = (this.drawnMax - this.drawnMin)/4;
+      amp = !this.calibrated ? `${formatSig(div, 2)} LSB/div`
+          : div < 0.1 ? `${formatSig(div*1000, 2)} µV/div` : `${formatSig(div, 2)} mV/div`;
+    }
+    const text = amp ? `${time} · ${amp}` : time;
+    if (text !== this.scaleTagText) { this.scaleTagText = text; this.scaleTagEl.textContent = text; }
   }
   // The raw traces' second axis: the painted mV span divided by one LSB.
   setCodeAxis(on) {
@@ -6042,14 +6318,14 @@ class TurboSweepChart {
     const effectiveGrid = this.gridMode === 'auto' ? (traceStyleConfig().grid || 'clinical') : this.gridMode;
     if (effectiveGrid === 'dots') {
       const step = Math.max(14, Math.min(34, Math.round(h/6)));
-      g.fillStyle = 'rgba(146,176,210,.20)';
+      g.fillStyle = tone('--ink-mid', .20);
       for (let y = step; y < h; y += step) {
         for (let x = step; x < w; x += step) g.fillRect(Math.round(x), Math.round(y), 1, 1);
       }
       return;
     }
     if (effectiveGrid !== 'clinical') {
-      g.strokeStyle = 'rgba(146,176,210,.09)'; g.lineWidth = 1; g.beginPath();
+      g.strokeStyle = tone('--ink-mid', .09); g.lineWidth = 1; g.beginPath();
       for (let i = 1; i < 4; i++) { const y = Math.round(i*h/4)+0.5; g.moveTo(0,y); g.lineTo(w,y); }
       for (let i = 1; i < 10; i++) { const x = Math.round(i*w/10)+0.5; g.moveTo(x,0); g.lineTo(x,h); }
       g.stroke();
@@ -6068,11 +6344,21 @@ class TurboSweepChart {
       for (let x = 0; x <= w+0.5; x += step) { const px = Math.round(x)+0.5; g.moveTo(px,0); g.lineTo(px,h); }
       g.stroke();
     };
-    drawVertical(minorX, 'rgba(255,116,110,.070)', 1);
-    drawVertical(majorX, 'rgba(255,116,110,.175)', 1);
+    drawVertical(minorX, PALETTE.gridMinor, 1);
+    drawVertical(majorX, PALETTE.gridMajor, 1);
 
     const span = this.drawnMax - this.drawnMin;
-    if (this.calibrated && this.drawnScaleValid && span > 0 && span < 40) {
+    if (this.respiration && this.calibrated && this.drawnScaleValid && span > 0) {
+      // a 1-2-5 step giving three to six lines - a breath is 20-70 uV, so a
+      // millimetre-paper step would draw nothing on this well
+      const step = niceStep(span/4);
+      g.strokeStyle = PALETTE.gridMajor; g.lineWidth = 1; g.beginPath();
+      for (let v = Math.ceil(this.drawnMin/step)*step; v <= this.drawnMax; v += step) {
+        const py = Math.round(h - (v-this.drawnMin)/span*h)+0.5;
+        g.moveTo(0,py); g.lineTo(w,py);
+      }
+      g.stroke();
+    } else if (this.calibrated && this.drawnScaleValid && span > 0 && span < 40) {
       const drawHorizontal = (stepMv, style, lineWidth) => {
         const stepPx = stepMv/span*h;
         if (stepPx < 3) return;
@@ -6084,10 +6370,10 @@ class TurboSweepChart {
         }
         g.stroke();
       };
-      drawHorizontal(0.1, 'rgba(255,116,110,.070)', 1);
-      drawHorizontal(0.5, 'rgba(255,116,110,.175)', 1);
+      drawHorizontal(0.1, PALETTE.gridMinor, 1);
+      drawHorizontal(0.5, PALETTE.gridMajor, 1);
     } else {
-      g.strokeStyle = 'rgba(255,116,110,.12)'; g.lineWidth = 1; g.beginPath();
+      g.strokeStyle = PALETTE.gridMajor; g.lineWidth = 1; g.beginPath();
       for (let i = 1; i < 4; i++) { const y = Math.round(i*h/4)+0.5; g.moveTo(0,y); g.lineTo(w,y); }
       g.stroke();
     }
@@ -6169,6 +6455,7 @@ class TurboSweepChart {
         }));
       }
     }
+    this.updateScaleTag();
     const gridIsClinical = (this.gridMode === 'auto'
       ? (traceStyleConfig().grid || 'clinical') : this.gridMode) === 'clinical';
     if (gridIsClinical && this.calibrated) {
@@ -6302,8 +6589,8 @@ class TurboSweepChart {
     if (!q.cursor || this.currentColumn < 0) return;
     const ctx = this.ctx, w = this.cursorWidth, x = this.currentColumn;
     const grad = ctx.createLinearGradient(x-w, 0, x+2, 0);
-    grad.addColorStop(0, 'rgba(255,255,255,0)');
-    grad.addColorStop(1, 'rgba(255,255,255,.15)');
+    grad.addColorStop(0, tone('--cursor', 0));
+    grad.addColorStop(1, tone('--cursor', .15));
     ctx.fillStyle = grad; ctx.fillRect(x-w, 0, w+2, this.height);
   }
 
@@ -6404,6 +6691,9 @@ function applyTypeface() {
   const face = $('uiTypeface')?.value || 'system';
   if (face === 'system') document.documentElement.removeAttribute('data-face');
   else document.documentElement.setAttribute('data-face', face);
+  const cs = getComputedStyle(document.documentElement);
+  PALETTE.mono = cs.getPropertyValue('--mono').trim();
+  PALETTE.sans = cs.getPropertyValue('--sans').trim();
   // Metrics changed, so every canvas that measures text has to be rebuilt.
   requestAnimationFrame(() => { CHARTS.forEach(c => c.resize()); applySweepSettings(); });
   savePrefs();
@@ -6473,6 +6763,7 @@ function updateRawScales() {
     if (!c) return;
     c.lsbMv = rawLsbMv(channel);
     c.setCodeAxis(rawDisplay === 'both');
+    $('scopeStack')?.classList.toggle('code-axes', rawDisplay === 'both');
     const unit = $(channel === 0 ? 'unitRawCh1' : 'unitRawCh2');
     if (unit) unit.title = `mV = code × LSB.  LSB = Vref / (gain × (2^23 − 1)) = `
       + `${activeReferenceMv().toFixed(0)} mV / (${gainByCode[activeGainCode(channel)] || 6} × 8 388 607) `
@@ -6514,6 +6805,7 @@ function toggleFreeze() {
   frozen = !frozen;
   const button = $('btnFreeze');
   button.textContent = frozen ? 'RESUME' : 'FREEZE';
+  button.setAttribute('aria-pressed', String(frozen));
   button.className = 'btn sm' + (frozen ? ' primary' : '');
   if (!frozen) { rxQueueCh1.clear(); rxQueueCh2.clear(); resetPlayoutClock(); CHARTS.forEach(c => c.queueBreak()); }
   toast(frozen ? 'Display frozen — acquisition and recording continue.' : 'Display resumed.', 'info', 2400);
@@ -6676,9 +6968,9 @@ function drawDutySpark(canvasId, series, colour, label) {
   canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
   const g = canvas.getContext('2d');
   g.setTransform(dpr,0,0,dpr,0,0);
-  g.fillStyle = 'rgba(10,15,22,.85)'; g.fillRect(0,0,w,h);
+  g.fillStyle = tone('--s-well', .85); g.fillRect(0,0,w,h);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
   g.beginPath();
   for (const frac of [0.25, 0.5, 0.75]) { const y = Math.round(h*frac)+0.5; g.moveTo(0,y); g.lineTo(w,y); }
   g.stroke();
@@ -6701,8 +6993,8 @@ function drawDutySpark(canvasId, series, colour, label) {
     });
     g.strokeStyle = colour; g.lineWidth = 1.6; g.stroke();
   }
-  g.fillStyle = 'rgba(146,176,210,.65)';
-  g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .65);
+  g.font = `600 9px ${PALETTE.mono}`;
   g.fillText(label, 6, 12);
   g.fillText('100%', w-30, 12);
 }
@@ -6714,9 +7006,9 @@ function drawBatterySpark() {
   canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
   const g = canvas.getContext('2d');
   g.setTransform(dpr,0,0,dpr,0,0);
-  g.fillStyle = 'rgba(10,15,22,.85)'; g.fillRect(0,0,w,h);
+  g.fillStyle = tone('--s-well', .85); g.fillRect(0,0,w,h);
   if (batMvHistory.length < 2) {
-    g.fillStyle = 'rgba(146,176,210,.55)'; g.font = '600 9px ui-monospace, monospace';
+    g.fillStyle = tone('--ink-mid', .55); g.font = `600 9px ${PALETTE.mono}`;
     g.fillText('collecting voltage history…', 6, h/2);
     return;
   }
@@ -6731,8 +7023,8 @@ function drawBatterySpark() {
     i ? g.lineTo(x,y) : g.moveTo(x,y);
   });
   g.strokeStyle = PALETTE.ok; g.lineWidth = 1.6; g.stroke();
-  g.fillStyle = 'rgba(146,176,210,.6)';
-  g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .6);
+  g.font = `600 9px ${PALETTE.mono}`;
   g.fillText('4.20 V', 6, 11); g.fillText('3.30 V', 6, h-4);
 }
 
@@ -7076,7 +7368,7 @@ function renderPowerTab() {
     adsEl.textContent = pwrState.ADS === undefined ? '—' : pwrState.ADS === '1' ? 'RUNNING' : 'STALLED';
     adsEl.className = pwrState.ADS === '1' ? 'good' : pwrState.ADS === undefined ? '' : 'bad';
   }
-  drawDutySpark('pwrSpark', pwrSleepHistory, 'rgb(61,220,151)', 'core asleep');
+  drawDutySpark('pwrSpark', pwrSleepHistory, PALETTE.ecg, 'core asleep');
   renderPowerModel();
   renderLiveDraw();
   renderAbTable();
@@ -7684,14 +7976,14 @@ function drawPackCurve(d) {
   canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
   const g = canvas.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = 'rgba(10,15,22,.85)'; g.fillRect(0, 0, w, h);
+  g.fillStyle = tone('--s-well', .85); g.fillRect(0, 0, w, h);
   const L = 34, R = 6, T = 12, B = 18;
   const xOf = pct => L + (pct/100)*(w - L - R);
   const yOf = mv => T + (1 - (mv - 3300)/(4250 - 3300))*(h - T - B);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
-  g.fillStyle = 'rgba(146,176,210,.55)';
-  g.font = '600 9px ui-monospace, monospace';
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
+  g.fillStyle = tone('--ink-mid', .55);
+  g.font = `600 9px ${PALETTE.mono}`;
   for (const mv of [3400, 3600, 3800, 4000, 4200]) {
     const y = Math.round(yOf(mv))+0.5;
     g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
@@ -7712,10 +8004,10 @@ function drawPackCurve(d) {
     }
     g.stroke(); g.setLineDash([]);
   };
-  line(LIPO_MV, LIPO_PCT, 'rgba(146,176,210,.5)', [4, 3]);
-  if (d && d.ok) line(d.mv, d.pct, d.complete ? 'rgb(61,220,151)' : 'rgb(240,158,74)', []);
+  line(LIPO_MV, LIPO_PCT, tone('--ink-mid', .5), [4, 3]);
+  if (d && d.ok) line(d.mv, d.pct, d.complete ? PALETTE.ecg : PALETTE.resp, []);
 
-  g.fillStyle = 'rgba(146,176,210,.65)';
+  g.fillStyle = tone('--ink-mid', .65);
   g.fillText('generic (dashed) vs this pack', L + 4, T + 8);
 }
 
@@ -8741,7 +9033,9 @@ const STRIP_ROW_SECONDS = 10;
 
 function openEcgStrip() {
   openModal('ecgStrip');
-  requestAnimationFrame(drawEcgStrip);
+  // drawn now, not on the next frame: the dialog is laid out the moment it
+  // opens, and a deferred draw is skipped wherever frames are throttled
+  drawEcgStrip();
 }
 
 function stripGeometry() {
@@ -8834,8 +9128,8 @@ function drawEcgStrip() {
       for (let y = mid; y <= top+g.rowH+0.5; y += step) { const py = Math.round(y)+0.5; ctx.moveTo(g.padL, py); ctx.lineTo(g.padL+g.rowW, py); }
       ctx.stroke();
     };
-    drawSquares(1, 'rgba(240,120,120,.42)', 1);
-    drawSquares(5, 'rgba(226,74,74,.72)', 1);
+    drawSquares(1, PALETTE.paperGridMinor, 1);
+    drawSquares(5, PALETTE.paperGridMajor, 1);
     ctx.restore();
 
     // ---- trace -----------------------------------------------------
@@ -8880,14 +9174,14 @@ function drawEcgStrip() {
     // ---- row label: elapsed time at the end of this row -------------
     const endSec = Math.round((row+1)*STRIP_ROW_SECONDS);
     ctx.fillStyle = PALETTE.paperLabel;
-    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.font = `600 10px ${PALETTE.mono}`;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText(`0:${String(endSec % 60).padStart(2,'0')}`, calX - 4*g.px, mid);
   }
 
   // ---- footer ------------------------------------------------------
   ctx.fillStyle = PALETTE.paperLabel;
-  ctx.font = '500 10px ui-monospace, monospace';
+  ctx.font = `500 10px ${PALETTE.mono}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   const foot = height - 7;
   ctx.fillText(`seconds within the row  ·  ${g.mmPerSec} mm/s  ·  ${g.mmPerMv} mm/mV`
@@ -9508,6 +9802,20 @@ class RWaveMeter {
 }
 const rWave = new RWaveMeter();
 
+/* The respiration card's secondary readout, the counterpart of the ECG
+   card's R / QRS line: the rate the detector already reports and the breath
+   period it implies.  Shown only while the detector says LOCKED - otherwise
+   the state, so a learning detector never looks like a measurement. */
+function renderRespReadout() {
+  const el = $('respReadout'); if (!el) return;
+  const mode = activeDisplayModes[0];
+  if (!mode || !mode.normal) { el.textContent = ''; return; }
+  const r = latestRespResult || {};
+  const text = r.quality === 'LOCKED' && Number.isFinite(r.rate) && r.rate > 0
+    ? `RR ${Math.round(r.rate)} /min · ${(60/r.rate).toFixed(1)} s per breath`
+    : `RR — ${String(r.quality || 'learning').toLowerCase()}`;
+  if (el.textContent !== text) el.textContent = text;
+}
 function renderRWave() {
   const el = $('rWaveReadout'); if (!el) return;
   const mode = activeDisplayModes[1];
@@ -9626,7 +9934,7 @@ function drawHudSparkline() {
   const ceiling = budget*2.2;
 
   // budget line — a bar reaching it means the frame missed its vsync
-  ctx.strokeStyle = 'rgba(146,176,210,.22)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = tone('--ink-mid', .22); ctx.lineWidth = 1;
   const budgetY = h - (budget/ceiling)*h;
   ctx.beginPath(); ctx.moveTo(0, budgetY+0.5); ctx.lineTo(w, budgetY+0.5); ctx.stroke();
 
@@ -9785,6 +10093,8 @@ function animationLoop(frameTimestamp = performance.now()) {
         if (sampleCounter % updateEvery === 0) {
           setVitalTag('hrQuality', latestQrsResult.quality);
           renderRWave();
+          renderRespReadout();
+          vitalsFreshAt = performance.now();
           if (Number.isFinite(latestQrsResult.hr) && latestQrsResult.hr >= 25 && latestQrsResult.hr <= 240)
             setText('valHR', Math.round(latestQrsResult.hr));
           else if (['LEAD OFF','SATURATED','NO QRS'].includes(latestQrsResult.quality)) setText('valHR','--');
@@ -10243,8 +10553,8 @@ function computeAnalysis(snapshot) {
 // Say why a plot is blank. An empty canvas and a broken one look identical.
 function hrvEmpty(g, w, h, why) {
   g.clearRect(0, 0, w, h);
-  g.fillStyle = 'rgba(146,176,210,.55)';
-  g.font = '600 11px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .55);
+  g.font = `600 11px ${PALETTE.mono}`;
   g.fillText(why, 14, h/2);
 }
 
@@ -10323,8 +10633,8 @@ function drawPoincare(r, surface) {
   const X = v => L + (v - lo)/(hi - lo)*(w - L - R);
   const Y = v => h - B - (v - lo)/(hi - lo)*(h - T - B);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
-  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
+  g.fillStyle = tone('--ink-mid', .6); g.font = `600 9px ${PALETTE.mono}`;
   const ticks = 4;
   for (let i = 0; i <= ticks; i++) {
     const v = lo + (hi - lo)*i/ticks;
@@ -10334,11 +10644,11 @@ function drawPoincare(r, surface) {
     g.fillText(v.toFixed(0), 4, y+3);
     g.fillText(v.toFixed(0), x-12, h-8);
   }
-  g.strokeStyle = 'rgba(146,176,210,.4)'; g.setLineDash([4,3]);
+  g.strokeStyle = tone('--ink-mid', .4); g.setLineDash([4,3]);
   g.beginPath(); g.moveTo(X(lo), Y(lo)); g.lineTo(X(hi), Y(hi)); g.stroke();
   g.setLineDash([]);
 
-  g.fillStyle = 'rgba(120,214,217,.55)';
+  g.fillStyle = tone('--sig-ecg-filt', .55);
   for (const [a, b] of pts) { g.beginPath(); g.arc(X(a), Y(b), 1.9, 0, 6.2832); g.fill(); }
 
   const { sd1, sd2 } = r.poincare;
@@ -10352,12 +10662,12 @@ function drawPoincare(r, surface) {
     const rx = Math.abs(sd2*sx), ry = Math.abs(sd1*sy);
     if (rx > 0 && ry > 0 && Number.isFinite(rx) && Number.isFinite(ry)) {
       g.save(); g.translate(X(ma), Y(mb)); g.rotate(-Math.PI/4);
-      g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.5;
+      g.strokeStyle = PALETTE.ecg; g.lineWidth = 1.5;
       g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, 6.2832); g.stroke();
       g.restore();
     }
   }
-  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillStyle = tone('--ink-mid', .75);
   g.fillText(`RRn+1 (ms) · ${pts.length} pairs`, L+4, T+9);
   g.fillText('RRn (ms)', w - 62, h - 8);
 }
@@ -10380,14 +10690,14 @@ function drawHrvPsd(r, surface) {
   if (!(peak > 0)) { hrvEmpty(g, w, h, 'No spectral power.'); return; }
   const Y = v => h - B - (v/peak)*(h - T - B);
 
-  const TINT = { vlf:'rgba(146,176,210,.10)', lf:'rgba(240,158,74,.13)', hf:'rgba(120,214,217,.13)' };
+  const TINT = { vlf:tone('--ink-mid', .10), lf:tone('--sig-resp', .13), hf:tone('--sig-ecg-filt', .13) };
   for (const b of HRV_BANDS) {
-    g.fillStyle = psd.bands[b.key].enough ? TINT[b.key] : 'rgba(240,158,74,.07)';
+    g.fillStyle = psd.bands[b.key].enough ? TINT[b.key] : tone('--sig-resp', .07);
     g.fillRect(X(b.lo), T, X(Math.min(b.hi, fMax)) - X(b.lo), h - T - B);
-    g.fillStyle = 'rgba(146,176,210,.7)'; g.font = '600 9px ui-monospace, monospace';
+    g.fillStyle = tone('--ink-mid', .7); g.font = `600 9px ${PALETTE.mono}`;
     g.fillText(b.label + (psd.bands[b.key].enough ? '' : ' ?'), X(b.lo) + 3, T + 10);
   }
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
   for (let i = 1; i <= 4; i++) {
     const y = Math.round(T + (h - T - B)*i/5)+0.5;
     g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
@@ -10398,18 +10708,18 @@ function drawHrvPsd(r, surface) {
     i ? g.lineTo(x, y) : g.moveTo(x, y);
   }
   g.lineTo(X(fMax), h - B); g.lineTo(L, h - B); g.closePath();
-  g.fillStyle = 'rgba(120,214,217,.18)'; g.fill();
+  g.fillStyle = tone('--sig-ecg-filt', .18); g.fill();
   g.beginPath();
   for (let i = 0; i < psd.freqs.length; i++) {
     const x = X(psd.freqs[i]), y = Y(psd.power[i]);
     i ? g.lineTo(x, y) : g.moveTo(x, y);
   }
-  g.strokeStyle = 'rgb(120,214,217)'; g.lineWidth = 1.5; g.stroke();
+  g.strokeStyle = PALETTE.ecgFilt; g.lineWidth = 1.5; g.stroke();
 
-  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .6); g.font = `600 9px ${PALETTE.mono}`;
   for (const f of [0.1, 0.2, 0.3, 0.4]) g.fillText(f.toFixed(1), X(f) - 8, h - 8);
   g.fillText('Hz', L - 26, h - 8);
-  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillStyle = tone('--ink-mid', .75);
   g.fillText(`${psd.n} NN · ${(psd.spanSec/60).toFixed(1)} min`, L + 4, h - B - 6);
 }
 
@@ -10764,7 +11074,7 @@ function derivationRows(ctx) {
   rows.push({
     key: 'hr',
     title: 'Heart rate',
-    sym: 'HR = 60 000 / NN&#772;',
+    sym: 'HR = 60 000 / NN̄',
     num: nn.nn.length >= 2
       ? `HR = 60 000 / <b>${f(hrv.mean, 1)}</b> ms`
       : 'HR = 60 000 / (waiting for beats)',
@@ -10781,12 +11091,12 @@ function derivationRows(ctx) {
   rows.push({
     key: 'thr',
     title: 'QRS decision threshold · Pan–Tompkins',
-    sym: 'THR = NPK + 0.25 &#183; (SPK &#8722; NPK)',
-    num: `THR = <b>${f(d.npki, 1)}</b> + 0.25 &#183; (<b>${f(d.spki, 1)}</b> &#8722; <b>${f(d.npki, 1)}</b>)`,
+    sym: 'THR = NPK + 0.25 · (SPK − NPK)',
+    num: `THR = <b>${f(d.npki, 1)}</b> + 0.25 · (<b>${f(d.spki, 1)}</b> − <b>${f(d.npki, 1)}</b>)`,
     out: f(d.threshold, 1),
     ok: Number.isFinite(d.threshold) && d.threshold > 0,
     why: 'SPK and NPK are running estimates of the signal peak and the noise peak in the integrated '
-       + 'waveform, each updated as 0.125&#183;new + 0.875&#183;old on every peak the detector classifies. '
+       + 'waveform, each updated as 0.125·new + 0.875·old on every peak the detector classifies. '
        + 'The threshold is not a constant anywhere in this firmware — it chases the signal, which is why '
        + 'the same electrode set works at rest and after moving.',
   });
@@ -10797,14 +11107,14 @@ function derivationRows(ctx) {
   rows.push({
     key: 'ramp',
     title: 'R-wave amplitude',
-    sym: 'V<sub>R</sub> = code / (2<sup>23</sup>&#8722;1) &#215; V<sub>REF</sub> / G',
+    sym: 'V<sub>R</sub> = code / (2<sup>23</sup>−1) × V<sub>REF</sub> / G',
     num: rw && rw.ok && Number.isFinite(gain)
-      ? `V<sub>R</sub> = code / 8 388 607 &#215; <b>${vref}</b> mV / <b>${gain}</b>`
+      ? `V<sub>R</sub> = code / 8 388 607 × <b>${vref}</b> mV / <b>${gain}</b>`
       : 'V<sub>R</sub> = (needs a locked QRS)',
     out: rw && rw.ok ? `${f(rw.amp, 3)} mV` : '—',
     ok: !!(rw && rw.ok),
     why: rw && rw.ok
-      ? `Median over <b>${rw.beats}</b> beats, spread &#177;${f(rw.spread, 3)} mV. Measured from the `
+      ? `Median over <b>${rw.beats}</b> beats, spread ±${f(rw.spread, 3)} mV. Measured from the `
         + 'fiducial back to the true peak, not at the fiducial: the Pan–Tompkins mark lags the R peak by '
         + 'about 90–110 ms because of the integrator window, so reading amplitude there would measure the '
         + 'ST segment instead.'
@@ -10816,9 +11126,9 @@ function derivationRows(ctx) {
   rows.push({
     key: 'sdnn',
     title: 'SDNN · overall variability',
-    sym: 'SDNN = &#8730;( &#931;(NN<sub>i</sub> &#8722; NN&#772;)&#178; / (N&#8722;1) )',
+    sym: 'SDNN = √( Σ(NN<sub>i</sub> − NN̄)² / (N−1) )',
     num: nn.nn.length >= 4
-      ? `SDNN = &#8730;( &#931;(NN<sub>i</sub> &#8722; <b>${f(hrv.mean, 1)}</b>)&#178; / <b>${nn.nn.length - 1}</b> )`
+      ? `SDNN = √( Σ(NN<sub>i</sub> − <b>${f(hrv.mean, 1)}</b>)² / <b>${nn.nn.length - 1}</b> )`
       : 'SDNN = (needs 4 beats)',
     out: `${f(hrv.sdnn, 1)} ms`,
     ok: nn.nn.length >= 16,
@@ -10831,9 +11141,9 @@ function derivationRows(ctx) {
   rows.push({
     key: 'rmssd',
     title: 'RMSSD · beat-to-beat variability',
-    sym: 'RMSSD = &#8730;( &#931;(NN<sub>i+1</sub> &#8722; NN<sub>i</sub>)&#178; / (N&#8722;1) )',
+    sym: 'RMSSD = √( Σ(NN<sub>i+1</sub> − NN<sub>i</sub>)² / (N−1) )',
     num: nn.nn.length >= 4
-      ? `RMSSD = &#8730;( &#931;&#916;NN&#178; / <b>${nn.nn.length - 1}</b> )`
+      ? `RMSSD = √( ΣΔNN² / <b>${nn.nn.length - 1}</b> )`
       : 'RMSSD = (needs 4 beats)',
     out: `${f(hrv.rmssd, 1)} ms`,
     ok: nn.nn.length >= 16,
@@ -10846,9 +11156,9 @@ function derivationRows(ctx) {
   rows.push({
     key: 'sd',
     title: 'Poincar&eacute; SD1 &amp; SD2',
-    sym: 'SD1 &#8776; RMSSD / &#8730;2 &nbsp;&#183;&nbsp; SD2 = &#8730;(2&#183;SDNN&#178; &#8722; SD1&#178;)',
+    sym: 'SD1 ≈ RMSSD / √2 &nbsp;·&nbsp; SD2 = √(2·SDNN² − SD1²)',
     num: Number.isFinite(pc.sd1)
-      ? `SD1 &#8776; <b>${f(hrv.rmssd, 1)}</b> / 1.414 = <b>${f(hrv.rmssd/Math.SQRT2, 2)}</b> `
+      ? `SD1 ≈ <b>${f(hrv.rmssd, 1)}</b> / 1.414 = <b>${f(hrv.rmssd/Math.SQRT2, 2)}</b> `
         + `&nbsp;vs measured <b>${f(pc.sd1, 2)}</b>`
       : 'SD1 = (needs 5 beats)',
     out: Number.isFinite(pc.sd1) ? `${f(pc.sd1, 1)} · ${f(pc.sd2, 1)} ms` : '—',
@@ -10863,9 +11173,9 @@ function derivationRows(ctx) {
   rows.push({
     key: 'pnn50',
     title: 'pNN50',
-    sym: 'pNN50 = 100 &#183; count(|&#916;NN| &gt; 50 ms) / (N&#8722;1)',
+    sym: 'pNN50 = 100 · count(|ΔNN| &gt; 50 ms) / (N−1)',
     num: nn.nn.length >= 4
-      ? `pNN50 = 100 &#183; count / <b>${nn.nn.length - 1}</b>`
+      ? `pNN50 = 100 · count / <b>${nn.nn.length - 1}</b>`
       : 'pNN50 = (needs 4 beats)',
     out: `${f(hrv.pnn50, 1)} %`,
     ok: nn.nn.length >= 16,
@@ -10877,17 +11187,17 @@ function derivationRows(ctx) {
   rows.push({
     key: 'lfhf',
     title: 'LF / HF ratio',
-    sym: 'LF/HF = &#8747;<sub>0.04</sub><sup>0.15</sup>P(f)df &nbsp;&#247;&nbsp; &#8747;<sub>0.15</sub><sup>0.40</sup>P(f)df',
+    sym: 'LF/HF = ∫<sub>0.04</sub><sup>0.15</sup>P(f)df &nbsp;÷&nbsp; ∫<sub>0.15</sub><sup>0.40</sup>P(f)df',
     num: psd.ok
-      ? `LF/HF = <b>${f(psd.bands.lf.power, 0)}</b> ms&#178; / <b>${f(psd.bands.hf.power, 0)}</b> ms&#178;`
+      ? `LF/HF = <b>${f(psd.bands.lf.power, 0)}</b> ms² / <b>${f(psd.bands.hf.power, 0)}</b> ms²`
       : `LF/HF = (${psd.why || 'no spectrum'})`,
     out: psd.ok && Number.isFinite(psd.lfhf) ? f(psd.lfhf, 2) : '—',
     ok: psd.ok && psd.bands.lf.enough && psd.bands.hf.enough,
     why: psd.ok
       ? `P(f) is a Lomb&ndash;Scargle periodogram over <b>${psd.n}</b> unevenly spaced beats — no `
         + 'interpolation onto a regular grid, which would invent HF power that was never measured. '
-        + `Scaled so the bands sum to SDNN&#178;: <b>${f(psd.total, 0)}</b> against `
-        + `<b>${f(psd.sdnn**2, 0)}</b> ms&#178;.`
+        + `Scaled so the bands sum to SDNN²: <b>${f(psd.total, 0)}</b> against `
+        + `<b>${f(psd.sdnn**2, 0)}</b> ms².`
       : 'Needs at least 16 accepted beats spanning 20 seconds.',
   });
 
@@ -10896,7 +11206,7 @@ function derivationRows(ctx) {
   rows.push({
     key: 'resp',
     title: 'Respiration rate',
-    sym: 'f<sub>resp</sub> = 60 / T&#772;<sub>breath</sub>',
+    sym: 'f<sub>resp</sub> = 60 / T̄<sub>breath</sub>',
     num: Number.isFinite(brpm) && brpm > 0
       ? `f<sub>resp</sub> = 60 / <b>${f(60/brpm, 2)}</b> s`
       : 'f<sub>resp</sub> = (no breath detected)',
@@ -10912,7 +11222,7 @@ function derivationRows(ctx) {
     rows.push({
       key: 'mains',
       title: 'Mains contamination',
-      sym: 'share = &#931;P(48&#8211;52, 58&#8211;62 Hz) / &#931;P(f)',
+      sym: 'share = ΣP(48–52, 58–62 Hz) / ΣP(f)',
       num: `share = <b>${$('mMains')?.textContent || '—'}</b> of total spectral power`,
       out: $('mMains')?.textContent || '—',
       ok: true,
@@ -10987,16 +11297,16 @@ function drawImpedanceEnsemble(bc) {
   const Y = v => h - B - ((v - lo)/span)*(h - T - B);
 
   // The physiologically plausible window for an ejection-driven dip.
-  g.fillStyle = 'rgba(61,220,151,.09)';
+  g.fillStyle = tone('--sig-ecg', .09);
   g.fillRect(X(50), T, X(350) - X(50), h - T - B);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
   for (let t = 100; t < ms; t += 100) {
     const x = Math.round(X(t))+0.5;
     g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke();
   }
   // The trigger itself: t = 0 is the R wave.
-  g.strokeStyle = 'rgba(240,158,74,.75)'; g.lineWidth = 1.4;
+  g.strokeStyle = tone('--sig-resp', .75); g.lineWidth = 1.4;
   g.beginPath(); g.moveTo(X(0)+0.5, T); g.lineTo(X(0)+0.5, h - B); g.stroke();
 
   g.beginPath();
@@ -11004,13 +11314,13 @@ function drawImpedanceEnsemble(bc) {
     const x = X(1000*i/bc.fs), y = Y(bc.avg[i]);
     i ? g.lineTo(x, y) : g.moveTo(x, y);
   }
-  g.strokeStyle = bc.confirmed ? 'rgb(61,220,151)' : 'rgb(146,176,210)';
+  g.strokeStyle = bc.confirmed ? PALETTE.ecg : PALETTE.inkMid;
   g.lineWidth = 1.8; g.stroke();
 
-  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .6); g.font = `600 9px ${PALETTE.mono}`;
   for (let t = 0; t < ms; t += 100) g.fillText(`${t}`, X(t) - 6, h - 7);
   g.fillText('ms after R', X(0) + 4, h - 7);
-  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillStyle = tone('--ink-mid', .75);
   g.fillText(`${bc.n} beats averaged · z ${bc.z.toFixed(1)}`, L + 4, T + 9);
 }
 
@@ -11673,11 +11983,11 @@ function drawRhythmStrip(res) {
   const seg = wide.subarray(start);
   const lo = Math.min(-0.8, rhPercentile(seg, 0.5) - 0.2), hi = Math.max(1.2, rhPercentile(seg, 99.5) + 0.3);
   const T = 16, B = 14, X = i => (i / span) * w, Y = v => T + (hi - v) / (hi - lo) * (h - T - B);
-  g.strokeStyle = 'rgba(240,120,120,.10)'; g.lineWidth = 1;
+  g.strokeStyle = PALETTE.gridMajor; g.lineWidth = 1;
   for (let s = 0; s <= 10; s += 0.2) { const x = Math.round(X(s * fs)) + 0.5; g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); }
   for (let v = Math.ceil(lo * 2) / 2; v <= hi; v += 0.5) { const y = Math.round(Y(v)) + 0.5; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
   for (let i = 0; i < span; i++) {
-    if (res.quality.bad[start + i]) { g.fillStyle = 'rgba(158,158,158,.18)'; g.fillRect(X(i), T, Math.max(1, w / span), h - T - B); }
+    if (res.quality.bad[start + i]) { g.fillStyle = tone('--ink-mid', .18); g.fillRect(X(i), T, Math.max(1, w / span), h - T - B); }
   }
   g.beginPath();
   const step = Math.max(1, Math.floor(span / w));
@@ -11686,15 +11996,15 @@ function drawRhythmStrip(res) {
     for (let j = i; j < Math.min(span, i + step); j++) { mn = Math.min(mn, seg[j]); mx = Math.max(mx, seg[j]); }
     const x = X(i); if (i === 0) g.moveTo(x, Y(mn)); else g.lineTo(x, Y(mn)); g.lineTo(x, Y(mx));
   }
-  g.strokeStyle = 'rgb(61,220,151)'; g.lineWidth = 1.2; g.stroke();
-  g.font = '700 11px ui-monospace, monospace'; g.textAlign = 'center';
+  g.strokeStyle = PALETTE.ecg; g.lineWidth = 1.2; g.stroke();
+  g.font = `700 11px ${PALETTE.mono}`; g.textAlign = 'center';
   res.beats.r.forEach((p, i) => {
     if (p < start) return;
     const x = X(p - start), l = res.beats.label[i];
-    if (l === 'N') { g.strokeStyle = 'rgba(146,176,210,.7)'; g.beginPath(); g.moveTo(x, 3); g.lineTo(x, 10); g.stroke(); }
-    else { g.fillStyle = l === 'V' ? 'rgb(255,110,110)' : l === 'S' ? 'rgb(255,197,61)' : l === 'U' ? 'rgb(192,132,252)' : 'rgb(170,170,170)'; g.fillText(l === 'X' ? '?' : l, x, 12); }
+    if (l === 'N') { g.strokeStyle = tone('--ink-mid', .7); g.beginPath(); g.moveTo(x, 3); g.lineTo(x, 10); g.stroke(); }
+    else { g.fillStyle = l === 'V' ? PALETTE.alarmHigh : l === 'S' ? PALETTE.alarmMed : l === 'U' ? PALETTE.alarmLow : PALETTE.inkMid; g.fillText(l === 'X' ? '?' : l, x, 12); }
   });
-  g.textAlign = 'left'; g.fillStyle = 'rgba(146,176,210,.75)'; g.font = '600 9px ui-monospace, monospace';
+  g.textAlign = 'left'; g.fillStyle = tone('--ink-mid', .75); g.font = `600 9px ${PALETTE.mono}`;
   g.fillText('last 10 s · 0.5–40 Hz · grid 0.2 s / 0.5 mV · grey = excluded', 4, h - 3);
 }
 
@@ -11708,18 +12018,18 @@ function drawRhythmBeat(res) {
   lo -= 0.15; hi += 0.15;
   const Lm = 30, R = 8, T = 10, B = 18;
   const X = ms => Lm + (ms + pre * 1000 / fs) / (L * 1000 / fs) * (w - Lm - R), Y = v => T + (hi - v) / (hi - lo) * (h - T - B);
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1; g.fillStyle = 'rgba(146,176,210,.7)'; g.font = '600 9px ui-monospace, monospace';
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1; g.fillStyle = tone('--ink-mid', .7); g.font = `600 9px ${PALETTE.mono}`;
   for (let ms = -200; ms <= 200; ms += 100) { const x = Math.round(X(ms)) + 0.5; g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); g.fillText(`${ms}`, x - 8, h - 5); }
   g.beginPath();
   for (let i = 0; i < L; i++) { const x = X((i - pre) * 1000 / fs), y = Y(beat[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }
-  g.strokeStyle = 'rgb(230,236,245)'; g.lineWidth = 1.8; g.stroke();
+  g.strokeStyle = PALETTE.inkHi; g.lineWidth = 1.8; g.stroke();
   if (res.qEdges) {
-    g.setLineDash([3, 3]); g.strokeStyle = 'rgb(240,158,74)'; g.lineWidth = 1.2;
+    g.setLineDash([3, 3]); g.strokeStyle = PALETTE.resp; g.lineWidth = 1.2;
     for (const ms of [res.qEdges.on, res.qEdges.off]) { const x = X(ms); g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke(); }
-    g.setLineDash([]); g.fillStyle = 'rgb(240,158,74)'; g.font = '700 10px ui-monospace, monospace';
+    g.setLineDash([]); g.fillStyle = PALETTE.resp; g.font = `700 10px ${PALETTE.mono}`;
     g.fillText(`QRS ${res.qrs.toFixed(0)} ms`, X(res.qEdges.off) + 4, T + 10);
   }
-  g.fillStyle = 'rgba(146,176,210,.75)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .75); g.font = `600 9px ${PALETTE.mono}`;
   g.fillText('median of normal beats · ms from fiducial · orange: where the QRS edges were placed', Lm, T + 2);
 }
 
@@ -11771,13 +12081,13 @@ function renderMathSpectrum(spec) {
   const floor = top*1e-4;
   const Y = m => h - B - (Math.log10(Math.max(m, floor)/floor)/Math.log10(top/floor))*(h - T - B);
 
-  g.fillStyle = 'rgba(120,214,217,.10)';
+  g.fillStyle = tone('--sig-ecg-filt', .10);
   g.fillRect(X(5), T, X(25) - X(5), h - T - B);
-  g.fillStyle = 'rgba(240,158,74,.12)';
+  g.fillStyle = tone('--sig-resp', .12);
   g.fillRect(X(48), T, Math.max(2, X(52) - X(48)), h - T - B);
   if (maxHz > 62) g.fillRect(X(58), T, Math.max(2, X(62) - X(58)), h - T - B);
 
-  g.strokeStyle = 'rgba(146,176,210,.16)'; g.lineWidth = 1;
+  g.strokeStyle = tone('--ink-mid', .16); g.lineWidth = 1;
   for (let i = 1; i <= 3; i++) {
     const y = Math.round(T + (h - T - B)*i/4)+0.5;
     g.beginPath(); g.moveTo(L, y); g.lineTo(w-R, y); g.stroke();
@@ -11787,12 +12097,12 @@ function renderMathSpectrum(spec) {
     const x = X(i*resolution), y = Y(amplitude[i]);
     i === 1 ? g.moveTo(x, y) : g.lineTo(x, y);
   }
-  g.strokeStyle = 'rgb(120,214,217)'; g.lineWidth = 1.3; g.stroke();
+  g.strokeStyle = PALETTE.ecgFilt; g.lineWidth = 1.3; g.stroke();
 
-  g.fillStyle = 'rgba(146,176,210,.6)'; g.font = '600 9px ui-monospace, monospace';
+  g.fillStyle = tone('--ink-mid', .6); g.font = `600 9px ${PALETTE.mono}`;
   for (const hz of [10, 20, 40, 60, 80]) if (hz <= maxHz) g.fillText(String(hz), X(hz)-6, h-7);
   g.fillText('Hz', 6, h-7);
-  g.fillStyle = 'rgba(146,176,210,.75)';
+  g.fillStyle = tone('--ink-mid', .75);
   g.fillText('QRS 5–25', X(5)+3, T+9);
   if (X(48) < w - 40) g.fillText('mains', X(48)+3, T+9);
   g.fillText('log magnitude · 4 decades', L+4, h-B-5);
@@ -11826,8 +12136,8 @@ function prepareAnalysisCanvas(id) {
 }
 function drawAnalysisGrid(ctx, width, height, left, bottom, xLabels, yLabels) {
   ctx.fillStyle = PALETTE.well; ctx.fillRect(0,0,width,height);
-  ctx.strokeStyle = 'rgba(150,182,216,.11)'; ctx.lineWidth = 1;
-  ctx.font = "9px 'JetBrains Mono',monospace"; ctx.fillStyle = 'rgba(150,182,216,.6)';
+  ctx.strokeStyle = tone('--ink-mid', .11); ctx.lineWidth = 1;
+  ctx.font = `9px ${PALETTE.mono}`; ctx.fillStyle = tone('--ink-mid', .6);
   for (let i = 0; i <= 5; i++) {
     const x = left + (width-left-8)*i/5;
     ctx.beginPath(); ctx.moveTo(x,8); ctx.lineTo(x,height-bottom); ctx.stroke();
@@ -11876,7 +12186,7 @@ function drawHistogram(result) {
   drawAnalysisGrid(ctx, width, height, 50, 20,
     i => (min+(max-min)*i/5).toPrecision(3), i => Math.round(maxCount*(1-i/4)).toString());
   const plotWidth = width-58, barWidth = plotWidth/bins;
-  ctx.fillStyle = result.channel === 0 ? 'rgba(245,165,36,.8)' : 'rgba(79,216,232,.8)';
+  ctx.fillStyle = result.channel === 0 ? tone('--sig-resp', .8) : tone('--sig-ecg-filt', .8);
   for (let i = 0; i < bins; i++) {
     const h = counts[i]/maxCount*(height-28);
     ctx.fillRect(50+i*barWidth, height-20-h, Math.max(1, barWidth-1), h);
@@ -12080,6 +12390,203 @@ function toggleDensity() {
 }
 
 /* ---- status bar mirror -------------------------------------------- */
+/* The header status band.  It reads what the rest of the console has
+   already decided - the lead summary pill, the heart-rate quality tag, the
+   recorder state - and restates it in one place, so it cannot disagree with
+   the component that raised a state.  Nothing here feeds back into any
+   decision.  The recorder keeps recording when the link drops, so with no
+   link the band says "not known" rather than repeating the last state as if
+   it were current. */
+const SBAND_STALE_MS = 15000;
+const STREAM_RECENT_MS = 60000;
+const streamSeen = { gaps: 0, drops: 0, at: 0 };
+const ALARM_CATEGORY = { 1:'electrodes', 2:'rhythm', 3:'signal quality', 4:'information' };
+/* Every condition the console is currently showing somewhere, as
+   { cat, pri, text, detail }.  Nothing is decided here that is not already
+   on screen: each entry reads the element or the state that raised it. */
+function alarmConditions(linkUp) {
+  const out = [];
+  if (!linkUp) return out;
+  const txt = id => ($(id)?.textContent || '').trim();
+  const lead = txt('leadSummary'), hr = txt('hrQuality'), rr = txt('rrQuality');
+  // 1 electrodes
+  if (lead === 'LEAD OFF') out.push({ cat:1, pri:'high', text:'LEAD OFF', detail:txt('loffRegisterText') });
+  else if (lead === 'CHECK RLD') out.push({ cat:1, pri:'med', text:'CHECK RLD', detail:txt('loffRegisterText') });
+  // 2 rhythm - no QRS may be asystole, so it ranks with rhythm, at the
+  // priority its tag already flashes at; the rhythm card only counts while
+  // its determination is fresh (it runs with the Math tab)
+  if (hr === 'NO QRS') out.push({ cat:2, pri:'high', text:'NO QRS', detail:'no beats detected' });
+  const rh = typeof rhythmState !== 'undefined' ? rhythmState : null;
+  if (rh && rh.result && performance.now() - rh.lastAt < 5000) {
+    const label = rh.result.label, tint = RH_TINT[label];
+    if (tint === 'bad' || tint === 'warn')
+      out.push({ cat:2, pri:tint === 'bad' ? 'high' : 'med', text:label.toUpperCase(), detail:'rhythm card' });
+  }
+  // 3 signal quality
+  if (hr === 'SATURATED' || hr === 'STREAM GAP') out.push({ cat:3, pri:'high', text:hr, detail:'ECG channel' });
+  if (rr === 'NO RESP' || rr === 'INVALID') out.push({ cat:3, pri:'high', text:rr, detail:'respiration channel' });
+  const stale = vitalsStaleState();
+  if (stale.startsWith('NO DATA')) out.push({ cat:3, pri:'med', text:'NO DATA', detail:stale.replace('NO DATA', 'no samples').trim() });
+  if (streamSeen.at && performance.now() - streamSeen.at < STREAM_RECENT_MS)
+    out.push({ cat:3, pri:'low', text:'SAMPLES LOST', detail:'see Stream' });
+  const score = typeof ecgContact !== 'undefined' ? ecgContact.score() : null;
+  if (score !== null && score < 50) out.push({ cat:3, pri:'low', text:'POOR CONTACT', detail:`ECG ${score}/100` });
+  // 4 information
+  if (hr === 'LEARNING') out.push({ cat:4, pri:'info', text:'ACQUIRING', detail:'detector learning' });
+  if (stale === 'FROZEN') out.push({ cat:4, pri:'info', text:'FROZEN', detail:'display held, acquisition continues' });
+  return out;
+}
+const sbandCache = new Map();
+function sbandSet(id, value, attr) {
+  const key = id + (attr || '');
+  if (sbandCache.get(key) === value) return;
+  sbandCache.set(key, value);
+  const el = $(id); if (!el) return;
+  if (attr) el.setAttribute(attr, value);
+  else { el.textContent = value; if (el.classList.contains('sband-sub')) el.title = value; }
+}
+function formatClock(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s/3600), m = Math.floor(s/60) % 60, r = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+let vitalsFreshAt = 0;                // presentation only: the vitals were last written from live samples
+const VITALS_STALE_MS = 3000;
+function vitalsStaleState() {
+  if (typeof frozen !== 'undefined' && frozen) return 'FROZEN';
+  if (!$('linkDot')?.classList.contains('live')) return 'NO LINK';
+  const age = performance.now() - vitalsFreshAt;
+  return !vitalsFreshAt || age > VITALS_STALE_MS ? `NO DATA ${vitalsFreshAt ? Math.round(age/1000) + 's' : ''}`.trim() : '';
+}
+function setMeter(id, filled, label) {
+  const el = $(id); if (!el) return;
+  const q = String(Math.max(0, Math.min(5, filled|0)));
+  if (el.dataset.q !== q) el.dataset.q = q;
+  if (el.getAttribute('aria-label') !== label) { el.setAttribute('aria-label', label); el.title = label; }
+}
+function renderVitalsState() {
+  const stale = vitalsStaleState();
+  for (const [tile, tag] of [['clinicalMetricCh2', 'hrStale'], ['clinicalMetricCh1', 'rrStale']]) {
+    const el = $(tile), t = $(tag); if (!el || !t) continue;
+    el.classList.toggle('stale', !!stale);
+    t.hidden = !stale;
+    if (stale && t.textContent !== stale) t.textContent = stale;
+    // not having data because nobody is connected is not an alarm; having a
+    // link and no samples is
+    t.classList.toggle('quiet', stale === 'NO LINK' || stale === 'FROZEN');
+  }
+  // ECG: the contact-quality score the Signal tab already computes (0-100)
+  const score = typeof ecgContact !== 'undefined' ? ecgContact.score() : null;
+  setMeter('qmHr', score === null || stale ? 0 : Math.ceil(score/20),
+    score === null ? 'ECG contact quality not measured yet' : `ECG contact quality ${score} of 100`);
+  // RESP: the periodicity the respiration detector reports with its rate
+  const corr = latestRespResult && Number.isFinite(latestRespResult.corr) ? latestRespResult.corr : null;
+  setMeter('qmRr', corr === null || stale ? 0 : Math.round(Math.max(0, corr)*5),
+    corr === null ? 'Breathing periodicity not measured yet' : `Breathing periodicity ${(corr*100).toFixed(0)} %`);
+}
+setInterval(renderVitalsState, 500);
+
+function renderStatusBand() {
+  const txt = id => ($(id)?.textContent || '').trim();
+  const now = performance.now();
+  const reportAge = lastSdTelemetryAt ? now - lastSdTelemetryAt : Infinity;
+  // the link as the header's own link indicator shows it, so the two cannot disagree
+  const linkUp = !!$('linkDot')?.classList.contains('live');
+
+  // REC
+  let recLevel = 'idle', recValue = '—', recSub = 'not connected';
+  if (linkUp) {
+    if (webRecorderActive) {
+      recLevel = 'rec';
+      recValue = activeRecordMode === 'holter' ? 'HOLTER' : activeRecordMode === 'auto' ? 'TIMED' : 'RECORDING';
+      const samples = Number(txt('sdSamples').replace(/[^0-9]/g, '')) || 0;
+      if (reportAge <= SBAND_STALE_MS && samples > 0 && currentSps > 0) {
+        recSub = formatClock(samples / currentSps)
+          + (activeRecordMode === 'auto' && recordUiRemaining > 0 ? ` · ${recordUiRemaining}s left` : '');
+      } else {
+        recSub = Number.isFinite(reportAge) ? `last report ${Math.round(reportAge/1000)}s ago` : 'no report yet';
+      }
+    } else {
+      recValue = recorderCommandPending ? 'PENDING' : 'IDLE';
+      const file = txt('sdCurrentFile');
+      recSub = file && !/^[-—]$/.test(file) ? `last file ${file}` : 'not recording';
+    }
+  }
+  sbandSet('sbandRec', recLevel, 'data-level');
+  sbandSet('sbandRecValue', recValue);
+  sbandSet('sbandRecSub', recSub);
+  const dot = $('sbandRecDot');
+  if (dot) dot.className = 'rec-dot' + (recLevel === 'rec' ? ' live' : '');
+  const recSubEl = $('sbandRecSub');
+  if (recSubEl) recSubEl.classList.toggle('stale', recLevel === 'rec' && reportAge > SBAND_STALE_MS);
+
+  // SIGNAL - every active condition, ranked.  The category decides the
+  // order (electrodes, rhythm, signal quality, information: a detached lead
+  // makes everything below it meaningless); the colour is the priority the
+  // component that raised it already shows, so the band never disagrees with
+  // it and never shows a state more quietly than V4 did.
+  const conds = alarmConditions(linkUp);
+  const PR = { high:3, med:2, low:1, info:0, ok:0 };
+  conds.sort((a, b) => a.cat - b.cat || PR[b.pri] - PR[a.pri]);
+  const top = conds[0];
+  let sigLevel, sigValue, sigSub, sigPrio = '';
+  if (!linkUp) { sigLevel = 'idle'; sigValue = 'NO LINK'; sigSub = txt('linkSub') || '—'; }
+  else if (!top) {
+    // GOOD is a statement about the signal; say whether anything has looked
+    // at the rhythm, rather than let it be read as "rhythm normal"
+    const rh = typeof rhythmState !== 'undefined' ? rhythmState : null;
+    const rhythmFresh = rh && rh.result && performance.now() - rh.lastAt < 5000;
+    sigLevel = 'ok'; sigValue = 'GOOD';
+    sigSub = (txt('leadSummary') === 'LEADS ON' ? 'leads on · ' : '') + 'ECG locked · '
+           + (rhythmFresh ? (rh.result.label === RH_NSR ? 'rhythm normal' : rh.result.label.toLowerCase()) : 'rhythm not evaluated');
+  }
+  else {
+    sigLevel = top.pri; sigValue = top.text;
+    sigPrio = top.pri === 'high' ? '!!!' : top.pri === 'med' ? '!!' : top.pri === 'low' ? '!' : '';
+    const more = conds.filter(c => c.pri !== 'info').length - (top.pri !== 'info' ? 1 : 0);
+    sigSub = (top.detail || ALARM_CATEGORY[top.cat]) + (more > 0 ? ` · +${more} more` : '');
+  }
+  sbandSet('sbandSignal', sigLevel, 'data-level');
+  sbandSet('sbandSignalPrio', sigPrio);
+  sbandSet('sbandSignalValue', sigValue);
+  sbandSet('sbandSignalSub', sigSub);
+  const list = conds.map(c => `${c.pri === 'high' ? '!!! ' : c.pri === 'med' ? '!! ' : c.pri === 'low' ? '! ' : ''}`
+    + `${ALARM_CATEGORY[c.cat]}: ${c.text}${c.detail ? ` (${c.detail})` : ''}`).join('\n');
+  const cell = $('sbandSignal');
+  if (cell && cell.title !== list) { cell.title = list || 'No active condition'; }
+
+  // STREAM - samples the display never received: BLE frames missing or
+  // corrupt, the elastic buffer overflowing, the recorder's own ring
+  const gaps = (packetGapCount || 0) + (crcErrorCount || 0);
+  const drops = (browserQueueDrops || 0) + (firmwareRingDrops || 0);
+  if (gaps < streamSeen.gaps || drops < streamSeen.drops) { streamSeen.gaps = gaps; streamSeen.drops = drops; }  // counters reset on reconnect
+  if (gaps > streamSeen.gaps || drops > streamSeen.drops) { streamSeen.at = now; streamSeen.gaps = gaps; streamSeen.drops = drops; }
+  const recent = streamSeen.at && now - streamSeen.at < STREAM_RECENT_MS;
+  sbandSet('sbandStream', !linkUp ? 'idle' : recent ? 'low' : gaps + drops > 0 ? 'info' : 'ok', 'data-level');
+  sbandSet('sbandStreamValue', linkUp ? `${gaps} gap${gaps === 1 ? '' : 's'} · ${drops} drop${drops === 1 ? '' : 's'}` : '—');
+  sbandSet('sbandStreamSub', !linkUp ? 'not connected'
+    : streamSeen.at ? `last ${Math.round((now - streamSeen.at)/1000)}s ago` : 'none this session');
+  const sc = $('sbandStream');
+  const stitle = `BLE frames missing ${packetGapCount || 0} · corrupt frames ${crcErrorCount || 0} · `
+    + `display-queue samples dropped ${browserQueueDrops || 0} · recorder ring drops ${firmwareRingDrops || 0}`;
+  if (sc && sc.title !== stitle) sc.title = stitle;
+
+  // CARD
+  let cardLevel = 'idle', cardValue = '—', cardSub = linkUp ? 'no report yet' : 'not connected';
+  if (linkUp && reportAge < Infinity) {
+    const state = txt('sdState');
+    cardValue = state || '—';
+    cardLevel = /ERR|NO_CARD|FAIL|FULL/.test(state) ? 'med' : state === 'READY' || state === 'RECORDING' ? 'ok' : 'info';
+    const free = txt('sdFree');
+    cardSub = /\d/.test(free) ? `${free} free` : 'free space not scanned';
+    if (reportAge > SBAND_STALE_MS) cardSub = `last report ${Math.round(reportAge/1000)}s ago`;
+  }
+  sbandSet('sbandCard', cardLevel, 'data-level');
+  sbandSet('sbandCardValue', cardValue);
+  sbandSet('sbandCardSub', cardSub);
+}
+setInterval(renderStatusBand, 500);
+
 function updateStatusBar() {
   const sdState = $('sdState')?.textContent || '—';
   setText('sbSdState', sdState);
@@ -12272,10 +12779,10 @@ function initPalette() {
    18. BOOT
    ================================================================== */
 function boot() {
-  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV, codeAxisId:'yAxisCode_ch1' });
-  chart3_ch1 = new TurboSweepChart('fg3_ch1','bg3_ch1','yAxis3_ch1',PALETTE.respFilt,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV });
-  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg,{ calibrated:true, codeAxisId:'yAxisCode_ch2' });
-  chart3_ch2 = new TurboSweepChart('fg3_ch2','bg3_ch2','yAxis3_ch2',PALETTE.ecgFilt,{ calibrated:true });
+  chart1_ch1 = new TurboSweepChart('fg1_ch1','bg1_ch1','yAxis1_ch1',PALETTE.resp,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV, codeAxisId:'yAxisCode_ch1', scaleTagId:'wellScale1_ch1' });
+  chart3_ch1 = new TurboSweepChart('fg3_ch1','bg3_ch1','yAxis3_ch1',PALETTE.respFilt,{ calibrated:true, respiration:true, minSpan:RESP_MIN_SPAN_MV, scaleTagId:'wellScale3_ch1' });
+  chart1_ch2 = new TurboSweepChart('fg1_ch2','bg1_ch2','yAxis1_ch2',PALETTE.ecg,{ calibrated:true, codeAxisId:'yAxisCode_ch2', scaleTagId:'wellScale1_ch2' });
+  chart3_ch2 = new TurboSweepChart('fg3_ch2','bg3_ch2','yAxis3_ch2',PALETTE.ecgFilt,{ calibrated:true, scaleTagId:'wellScale3_ch2' });
   CHARTS = [chart1_ch1, chart1_ch2, chart3_ch1, chart3_ch2];
 
   initializeEditorOptions();
@@ -12404,7 +12911,7 @@ document.addEventListener('visibilitychange', () => {
   updateProtocolUi(true);
 });
 
-const MODAL_IDS = ['filterStudio','fileInspector','shortcutHelp'];
+const MODAL_IDS = ['ecgStrip','filterStudio','fileInspector','shortcutHelp'];
 
 document.addEventListener('keydown', event => {
   // Ctrl/Cmd + K opens the palette from anywhere, including text fields.
@@ -12414,6 +12921,17 @@ document.addEventListener('keydown', event => {
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); toggleBle(); return; }
   if (isPaletteOpen()) return;                       // the palette owns its own keys
   if (event.key === 'Escape') { MODAL_IDS.forEach(closeModal); return; }
+  if (event.key === 'Tab') {
+    const open = topOpenModal();
+    if (open) {
+      const f = modalFocusables(open);
+      if (!f.length) { event.preventDefault(); return; }
+      const first = f[0], last = f[f.length - 1], inside = open.contains(document.activeElement);
+      if (event.shiftKey && (!inside || document.activeElement === first)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (!inside || document.activeElement === last)) { event.preventDefault(); first.focus(); }
+      return;
+    }
+  }
 
   const tag = event.target.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || event.target.isContentEditable) return;
@@ -12434,8 +12952,9 @@ document.addEventListener('keydown', event => {
     if (activeTab === 'storage') triggerManualRecord();
     else toast('Open the Storage tab to record, or use ⌘K → record.', 'info', 2200);
   }
-  else if (event.key >= '1' && event.key <= '5') {
-    switchTab(['signal','registers','analysis','storage','link'][Number(event.key)-1]);
+  else if (event.key >= '1' && event.key <= '8') {
+    // 1-5 keep the tabs they always had; 6-8 reach the three that had no key
+    switchTab(['signal','registers','analysis','storage','link','math','power','led'][Number(event.key)-1]);
   }
 });
 

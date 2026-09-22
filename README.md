@@ -66,6 +66,12 @@ not need pairing.
 
 ## Firmware
 
+This is **Console V5** (the design record is `web03/docs/UI_V5.md` in the main
+repository): a status band in the header answering *is it recording, and is the
+signal good?* with the alarm hierarchy lead-off > rhythm > signal quality >
+information, every wave labelled with its scale (25 mm/s · 10 mm/mV), vitals that
+say when they are stale, and dialogs you can drive from the keyboard.
+
 This console speaks to firmware **V2.1.6**. Older firmware still connects; features
 added later degrade to blank tiles rather than wrong numbers.
 
