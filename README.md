@@ -5,6 +5,18 @@ ADS1292R analog front end + microSD, over Bluetooth Low Energy.
 
 ### ▶ Open it: **https://copter36775-blip.github.io/HECG-BLE-Test/**
 
+### 📱 V4 with a phone layout: **https://copter36775-blip.github.io/HECG-BLE-Test/v4/**
+
+The V4 console (`web02/hecg_console.html`) with a phone layout added. It switches on
+by itself on a phone, and the phone button in the header switches it by hand: heart
+rate and respiration side by side at the top, the filtered ECG full width under them,
+the display controls folded behind one button, and the screen kept on while the
+recorder is connected. With it off, the desktop layout is exactly what it was.
+
+**มือถือ:** เปิดลิงก์ `/v4/` ด้วย **Chrome บน Android** — หน้าจอจะเข้าโหมดมือถือเอง
+(HR กับการหายใจอยู่บนสุด, ECG เต็มความกว้าง, จอไม่ดับระหว่างเชื่อมต่อ) ·
+กดปุ่มรูปโทรศัพท์มุมบนเพื่อสลับโหมดเอง · iPhone ต้องใช้ **Bluefy** เหมือนเดิม
+
 One self-contained HTML file. No build step, no dependencies, no server, no network
 requests of any kind once the page has loaded — everything runs in the browser and talks
 straight to the board over BLE.
@@ -97,6 +109,7 @@ real and worth showing.
 
 ## Editing
 
+`v4/index.html` is a published copy of `web02/hecg_console.html`, phone layout included.
 `index.html` here is a published copy. It is generated from `web02/hecg_console.html`
 in the HECG01 project, which is where changes belong — the test suite
 (smoke, UI contract, accessibility, write cadence, battery trend, pack curve) runs
